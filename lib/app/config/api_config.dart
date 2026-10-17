@@ -1,0 +1,9 @@
+import '../../core/constants/api_constants.dart';
+
+class ApiConfig {
+  ApiConfig._();
+
+  static const String baseUrl = ApiConstants.baseUrl;
+  static const Duration connectTimeout = Duration(seconds: 30);
+  static const Duration receiveTimeout = Duration(seconds: 30);
+}

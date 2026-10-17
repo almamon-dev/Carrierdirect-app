@@ -1,0 +1,94 @@
+import 'package:flutter/material.dart';
+
+// User Authentic Core Screens (Dashboard, Profile, Auth)
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
+import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/profile/presentation/screens/edit_profile_screen.dart';
+import '../../features/profile/presentation/screens/profile_screen.dart';
+
+// Screen 1, 2, 3 Onboarding & Permissions (Matching User Mockup Image)
+import '../../features/onboarding/presentation/screens/location_success_screen.dart';
+import '../../features/permissions/location_permission_screen.dart';
+import '../../features/permissions/notification_permission_screen.dart';
+import '../../features/splash/splash_screen.dart';
+
+// Extra Tracking & Details Features
+import '../../features/gps_tracker/gps_tracker_screen.dart';
+import '../../features/order_details/order_details_screen.dart';
+import 'app_routes.dart';
+
+class RouteGenerator {
+  RouteGenerator._();
+
+  static Route<dynamic> generateRoute(RouteSettings settings) {
+    final args = settings.arguments;
+
+    switch (settings.name) {
+      // 1. Splash Screen (Screen 1 from mockup)
+      case AppRoutes.initial:
+      case AppRoutes.splash:
+        return MaterialPageRoute(builder: (_) => const SplashScreen());
+
+      // 2. Location Permission Screen (Screen 2: "Allow Location Access" from mockup)
+      case AppRoutes.locationPermission:
+      case AppRoutes.locationIntro:
+      case AppRoutes.onboarding:
+      case AppRoutes.onboardingIntro:
+        return MaterialPageRoute(builder: (_) => const LocationPermissionScreen());
+
+      // 3. Location Success Screen (Screen 6: "Location Enabled" Success State)
+      case AppRoutes.locationSuccess:
+        return MaterialPageRoute(builder: (_) => const LocationSuccessScreen());
+
+      // 4. Notification Permission Screen (Screen 3: "Stay Updated" from mockup)
+      case AppRoutes.notificationPermission:
+        return MaterialPageRoute(builder: (_) => const NotificationPermissionScreen());
+
+      // 4. Credential Login Screen (User's authentic LoginScreen)
+      case AppRoutes.login:
+        return MaterialPageRoute(builder: (_) => const LoginScreen());
+
+      // 5. Forgot Password Screen
+      case AppRoutes.forgotPassword:
+        return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+
+      // 6. Complete Profile Step & Dashboard (Opens 3-Step Verification Modal)
+      case AppRoutes.dashboard:
+      case AppRoutes.profileSetup:
+        return MaterialPageRoute(builder: (_) => const DashboardScreen());
+
+      // 7. Profile & Edit Profile Screens
+      case AppRoutes.profile:
+        return MaterialPageRoute(builder: (_) => const ProfileScreen());
+
+      case AppRoutes.editProfile:
+        return MaterialPageRoute(builder: (_) => const EditProfileScreen());
+
+      // 8. GPS Tracker (Active Job)
+      case AppRoutes.gpsTracker:
+        return MaterialPageRoute(
+          builder: (_) => GpsTrackerScreen(
+            initialLoad: args is Map<String, dynamic> ? args : null,
+          ),
+        );
+
+      // 9. Order Tracking (Details)
+      case AppRoutes.orderDetails:
+        return MaterialPageRoute(
+          builder: (_) => OrderDetailsScreen(
+            order: args is Map<String, dynamic> ? args : null,
+          ),
+        );
+
+      default:
+        return MaterialPageRoute(
+          builder: (_) => Scaffold(
+            body: Center(
+              child: Text('No route defined for ${settings.name}'),
+            ),
+          ),
+        );
+    }
+  }
+}
