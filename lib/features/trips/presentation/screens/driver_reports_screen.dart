@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 
@@ -34,8 +36,14 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final selectedDayData = _weeklyMilesData[_selectedBarIndex];
-    final totalMiles = _weeklyMilesData.fold<double>(0.0, (acc, item) => acc + (item['miles'] as double));
-    final totalLoads = _weeklyMilesData.fold<int>(0, (acc, item) => acc + (item['loads'] as int));
+    final totalMiles = _weeklyMilesData.fold<double>(
+      0.0,
+      (acc, item) => acc + (item['miles'] as double),
+    );
+    final totalLoads = _weeklyMilesData.fold<int>(
+      0,
+      (acc, item) => acc + (item['loads'] as int),
+    );
 
     return Scaffold(
       backgroundColor: lightBg,
@@ -45,7 +53,11 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
         scrolledUnderElevation: 1,
         shadowColor: cardBorder,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textMain),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 18,
+            color: textMain,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Column(
@@ -53,7 +65,11 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
           children: [
             Text(
               'Driver Performance Reports',
-              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: textMain),
+              style: TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.bold,
+                color: textMain,
+              ),
             ),
             Text(
               'Fleet Analytics & Mileage Graphs',
@@ -63,9 +79,17 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download_outlined, color: primaryColor, size: 20),
+            icon: const Icon(
+              Icons.file_download_outlined,
+              color: primaryColor,
+              size: 20,
+            ),
             onPressed: () {
-              AppToast.success(context, 'Weekly PDF Report exported successfully', icon: Icons.download_done_rounded);
+              AppToast.success(
+                context,
+                'Weekly PDF Report exported successfully',
+                icon: Icons.download_done_rounded,
+              );
             },
           ),
         ],
@@ -137,7 +161,7 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: cardBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(5),
                   border: Border.all(color: cardBorder),
                   boxShadow: [
                     BoxShadow(
@@ -171,7 +195,10 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(6),
@@ -194,11 +221,16 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                       height: 130,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
-                        children: List.generate(_weeklyMilesData.length, (index) {
+                        children: List.generate(_weeklyMilesData.length, (
+                          index,
+                        ) {
                           final item = _weeklyMilesData[index];
                           final miles = item['miles'] as double;
                           final maxMiles = 450.0;
-                          final normalizedHeight = (miles / maxMiles).clamp(0.05, 1.0);
+                          final normalizedHeight = (miles / maxMiles).clamp(
+                            0.05,
+                            1.0,
+                          );
                           final isSelected = _selectedBarIndex == index;
 
                           return Expanded(
@@ -216,8 +248,12 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                                     miles > 0 ? '${miles.toInt()}' : '-',
                                     style: TextStyle(
                                       fontSize: 9.5,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                      color: isSelected ? primaryColor : textSub,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? primaryColor
+                                          : textSub,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -229,12 +265,25 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                                         begin: Alignment.bottomCenter,
                                         end: Alignment.topCenter,
                                         colors: isSelected
-                                            ? [primaryColor, const Color(0xFFFF8A00)]
-                                            : [const Color(0xFFCBD5E1), const Color(0xFFE2E8F0)],
+                                            ? [
+                                                primaryColor,
+                                                const Color(0xFFFF8A00),
+                                              ]
+                                            : [
+                                                const Color(0xFFCBD5E1),
+                                                const Color(0xFFE2E8F0),
+                                              ],
                                       ),
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(4),
+                                      ),
                                       border: isSelected
-                                          ? Border.all(color: primaryColor.withValues(alpha: 0.8), width: 1.5)
+                                          ? Border.all(
+                                              color: primaryColor.withValues(
+                                                alpha: 0.8,
+                                              ),
+                                              width: 1.5,
+                                            )
                                           : null,
                                     ),
                                   ),
@@ -243,7 +292,9 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                                     item['day'] as String,
                                     style: TextStyle(
                                       fontSize: 11,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
                                       color: isSelected ? textMain : textSub,
                                     ),
                                   ),
@@ -265,7 +316,7 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: cardBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(5),
                   border: Border.all(color: cardBorder),
                 ),
                 child: Column(
@@ -327,11 +378,20 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _LegendRow(color: Color(0xFF10B981), label: '38 On-Time Deliveries (98.4%)'),
+                              _LegendRow(
+                                color: Color(0xFF10B981),
+                                label: '38 On-Time Deliveries (98.4%)',
+                              ),
                               SizedBox(height: 6),
-                              _LegendRow(color: Color(0xFFF59E0B), label: '1 Traffic Detour Delay (1.6%)'),
+                              _LegendRow(
+                                color: Color(0xFFF59E0B),
+                                label: '1 Traffic Detour Delay (1.6%)',
+                              ),
                               SizedBox(height: 6),
-                              _LegendRow(color: Color(0xFFEF4444), label: '0 Missed / Refused Appointments'),
+                              _LegendRow(
+                                color: Color(0xFFEF4444),
+                                label: '0 Missed / Refused Appointments',
+                              ),
                             ],
                           ),
                         ),
@@ -348,7 +408,7 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: cardBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(5),
                   border: Border.all(color: cardBorder),
                 ),
                 child: Column(
@@ -366,7 +426,10 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFECFDF5),
                             borderRadius: BorderRadius.circular(6),
@@ -384,11 +447,23 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    _buildSafetyProgressBar('Speed Limit Compliance', 0.99, '99.2% in green zone'),
+                    _buildSafetyProgressBar(
+                      'Speed Limit Compliance',
+                      0.99,
+                      '99.2% in green zone',
+                    ),
                     const SizedBox(height: 8),
-                    _buildSafetyProgressBar('Smooth Braking & Cornering', 0.96, '0 sudden deceleration events'),
+                    _buildSafetyProgressBar(
+                      'Smooth Braking & Cornering',
+                      0.96,
+                      '0 sudden deceleration events',
+                    ),
                     const SizedBox(height: 8),
-                    _buildSafetyProgressBar('Idle Fuel Efficiency', 0.94, '1.4% engine idle time'),
+                    _buildSafetyProgressBar(
+                      'Idle Fuel Efficiency',
+                      0.94,
+                      '1.4% engine idle time',
+                    ),
                   ],
                 ),
               ),
@@ -401,17 +476,26 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
                 height: 38,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    AppToast.success(context, 'Carrier Direct Analytics PDF Report generated', icon: Icons.picture_as_pdf_rounded);
+                    AppToast.success(
+                      context,
+                      'Carrier Direct Analytics PDF Report generated',
+                      icon: Icons.picture_as_pdf_rounded,
+                    );
                   },
                   icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
                   label: const Text(
                     'Export Complete Monthly Driver Report',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: textMain,
                     side: const BorderSide(color: cardBorder),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -470,7 +554,7 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: cardBorder),
       ),
       child: Column(
@@ -509,17 +593,18 @@ class _DriverReportsScreenState extends State<DriverReportsScreen> {
           children: [
             Text(
               title,
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textMain),
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: textMain,
+              ),
             ),
-            Text(
-              detail,
-              style: const TextStyle(fontSize: 10, color: textSub),
-            ),
+            Text(detail, style: const TextStyle(fontSize: 10, color: textSub)),
           ],
         ),
         const SizedBox(height: 4),
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(5),
           child: LinearProgressIndicator(
             value: progress,
             backgroundColor: const Color(0xFFF1F5F9),
@@ -551,7 +636,11 @@ class _LegendRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(fontSize: 11, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w500,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),

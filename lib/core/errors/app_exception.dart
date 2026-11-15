@@ -16,25 +16,23 @@ class AppException implements Exception {
 
 class NetworkException extends AppException {
   NetworkException(super.message, {super.statusCode})
-      : super(prefix: 'Network Error');
+    : super(prefix: 'Network Error');
 }
 
 class UnauthorizedException extends AppException {
   UnauthorizedException([super.message = 'Unauthorized access'])
-      : super(prefix: 'Auth Error', statusCode: 401);
+    : super(prefix: 'Auth Error', statusCode: 401);
 }
 
 class ServerException extends AppException {
   ServerException(super.message, {super.statusCode})
-      : super(prefix: 'Server Error');
+    : super(prefix: 'Server Error');
 }
 
 class ValidationException extends AppException {
-  ValidationException(super.message)
-      : super(prefix: 'Validation Error');
+  ValidationException(super.message) : super(prefix: 'Validation Error');
 }
 
 class CacheException extends AppException {
-  CacheException(super.message)
-      : super(prefix: 'Cache Error');
+  CacheException(super.message) : super(prefix: 'Cache Error');
 }

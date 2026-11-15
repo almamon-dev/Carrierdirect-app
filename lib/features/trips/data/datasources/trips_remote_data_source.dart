@@ -9,7 +9,8 @@ abstract class ITripsRemoteDataSource {
 class TripsRemoteDataSource implements ITripsRemoteDataSource {
   final ApiClient _apiClient;
 
-  TripsRemoteDataSource({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
+  TripsRemoteDataSource({ApiClient? apiClient})
+    : _apiClient = apiClient ?? ApiClient();
 
   @override
   Future<List<TripModel>> getTrips() async {
@@ -18,7 +19,9 @@ class TripsRemoteDataSource implements ITripsRemoteDataSource {
         endpoint: ApiConstants.trips,
         fromJson: (data) {
           final list = data as List;
-          return list.map((e) => TripModel.fromJson(e as Map<String, dynamic>)).toList();
+          return list
+              .map((e) => TripModel.fromJson(e as Map<String, dynamic>))
+              .toList();
         },
       );
       return response.data ?? [];

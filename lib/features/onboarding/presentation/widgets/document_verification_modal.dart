@@ -1,7 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl_phone_field/countries.dart';
+
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/routes/app_routes.dart';
+import '../../../../core/storage/local_storage.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../../services/location_service.dart';
 import '../../../../services/place_autocomplete_service.dart';
 import '../../../../shared/utils/app_toast.dart';
@@ -15,10 +24,14 @@ class DocumentVerificationModal extends StatefulWidget {
     required this.onVerificationComplete,
   });
 
-  static Future<void> show(BuildContext context, {required VoidCallback onVerificationComplete}) {
+  static Future<void> show(
+    BuildContext context, {
+    required VoidCallback onVerificationComplete,
+  }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => DocumentVerificationModal(
         onVerificationComplete: onVerificationComplete,
@@ -27,11 +40,13 @@ class DocumentVerificationModal extends StatefulWidget {
   }
 
   @override
-  State<DocumentVerificationModal> createState() => _DocumentVerificationModalState();
+  State<DocumentVerificationModal> createState() =>
+      _DocumentVerificationModalState();
 }
 
 class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
-  int _currentStep = 1; // 1: Personal Info, 2: Driver Details, 3: Documents & Submit
+  int _currentStep =
+      1; // 1: Personal Info, 2: Driver Details, 3: Documents & Submit
 
   // Color Tokens
   static const Color primaryOrange = Color(0xFFFF4A1F);
@@ -104,6 +119,180 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
 
   bool _isSubmitting = false;
 
+  // Server profile & verification status
+  bool _isLoadingProfile = false;
+  String? _serverVerificationStatus;
+  String? _serverRejectionReason;
+
+  // Existing uploaded document URLs from server
+  String? _existingAvatarUrl;
+  String? _existingLicenseFrontUrl;
+  String? _existingLicenseBackUrl;
+  String? _existingMedicalCardUrl;
+  String? _existingInsuranceUrl;
+
+  // Inline Field Validation Errors (Inline UI validation, no toast)
+  String? _fullNameError;
+  String? _phoneError;
+  String? _locationError;
+  String? _driverModeError;
+  String? _licenseClassError;
+  String? _experienceYearsError;
+  String? _documentsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingProfileData();
+  }
+
+  Future<String?> _getAuthToken() async {
+    final token = await SecureStorage().read(AppConstants.keyAuthToken);
+    if (token != null && token.isNotEmpty) return token;
+    final localToken = await LocalStorage().getString(
+      AppConstants.keyAuthToken,
+    );
+    if (localToken != null && localToken.isNotEmpty) return localToken;
+    return null;
+  }
+
+  Future<void> _loadExistingProfileData() async {
+    setState(() => _isLoadingProfile = true);
+    try {
+      final token = await _getAuthToken();
+      if (token == null || token.isEmpty) {
+        setState(() => _isLoadingProfile = false);
+        return;
+      }
+
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.driverProfile}',
+      );
+      final res = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final data = body['data'] as Map<String, dynamic>? ?? {};
+
+        final name =
+            data['name']?.toString() ?? data['full_name']?.toString() ?? '';
+        final phone =
+            (data['phone'] ??
+                    data['phone_number'] ??
+                    data['mobile'] ??
+                    data['user']?['phone'] ??
+                    data['user']?['phone_number'] ??
+                    (data['personal'] as Map<String, dynamic>?)?['phone'] ??
+                    (data['personal']
+                        as Map<String, dynamic>?)?['phone_number'] ??
+                    (data['driver_details']
+                        as Map<String, dynamic>?)?['phone'] ??
+                    (data['driver_details']
+                        as Map<String, dynamic>?)?['phone_number'])
+                ?.toString() ??
+            '';
+        final location = data['current_location']?.toString() ?? '';
+        final profilePic = data['profile_picture']?.toString();
+        final status = data['verification_status']?.toString();
+        final reason = data['rejection_reason']?.toString();
+
+        final details = data['driver_details'] as Map<String, dynamic>? ?? {};
+        final creds = data['credentials'] as Map<String, dynamic>? ?? {};
+
+        if (mounted) {
+          setState(() {
+            if (name.isNotEmpty && _fullNameController.text.isEmpty) {
+              _fullNameController.text = name;
+            }
+            if (phone.isNotEmpty &&
+                (_phoneController.text.isEmpty ||
+                    _phoneController.text.startsWith('+') ||
+                    _phoneController.text.startsWith('880'))) {
+              String cleaned = phone.trim();
+              if (cleaned.startsWith('+880') || cleaned.startsWith('880')) {
+                final bd = countries.firstWhere(
+                  (c) => c.code == 'BD',
+                  orElse: () => _selectedCountry,
+                );
+                _selectedCountry = bd;
+                cleaned = cleaned.replaceAll(RegExp(r'^\+?880'), '');
+                if (!cleaned.startsWith('0') && cleaned.length == 10) {
+                  cleaned = '0$cleaned';
+                }
+              } else if (cleaned.startsWith('+1') ||
+                  (cleaned.startsWith('1') && cleaned.length == 11)) {
+                final us = countries.firstWhere(
+                  (c) => c.code == 'US',
+                  orElse: () => _selectedCountry,
+                );
+                _selectedCountry = us;
+                cleaned = cleaned.replaceAll(RegExp(r'^\+?1'), '');
+              } else if (cleaned.startsWith('+')) {
+                cleaned = cleaned.replaceFirst(RegExp(r'^\+\d{1,4}\s*'), '');
+              }
+              _phoneController.text = cleaned.replaceAll(
+                RegExp(r'[\s\-\(\)]'),
+                '',
+              );
+            }
+            if (location.isNotEmpty && _locationController.text.isEmpty) {
+              _locationController.text = location;
+            }
+
+            _existingAvatarUrl = profilePic;
+            _serverVerificationStatus = status;
+            _serverRejectionReason = reason;
+
+            _existingLicenseFrontUrl =
+                creds['license_front']?.toString() ??
+                creds['license_document']?.toString();
+            _existingLicenseBackUrl =
+                creds['license_back']?.toString() ??
+                creds['license_back_document']?.toString();
+            _existingMedicalCardUrl =
+                creds['medical_card']?.toString() ??
+                creds['medical_card_document']?.toString();
+            _existingInsuranceUrl =
+                creds['insurance']?.toString() ??
+                creds['insurance_document']?.toString();
+
+            final mode = details['driver_mode']?.toString();
+            if (mode != null && driverModeOptions.contains(mode)) {
+              _driverMode = mode;
+            }
+            final license = details['license_class']?.toString();
+            if (license != null && licenseClassOptions.contains(license)) {
+              _licenseClass = license;
+            }
+            final exp = details['experience_years']?.toString();
+            if (exp != null && experienceOptions.contains(exp)) {
+              _experienceYears = exp;
+            }
+            final endorsements = details['endorsements']?.toString();
+            if (endorsements != null && _endorsementsController.text.isEmpty) {
+              _endorsementsController.text = endorsements;
+            }
+            final vehicles = details['vehicle_types']?.toString();
+            if (vehicles != null && _vehicleTypesController.text.isEmpty) {
+              _vehicleTypesController.text = vehicles;
+            }
+          });
+        }
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingProfile = false);
+    }
+  }
+
   @override
   void dispose() {
     _fullNameController.dispose();
@@ -119,18 +308,33 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
   }
 
   void _nextStep() {
-    // Validation
+    setState(() {
+      _fullNameError = null;
+      _phoneError = null;
+      _locationError = null;
+      _driverModeError = null;
+      _licenseClassError = null;
+      _experienceYearsError = null;
+      _documentsError = null;
+    });
+
+    // Inline Validation
     if (_currentStep == 1) {
+      bool hasError = false;
       if (_fullNameController.text.trim().isEmpty) {
-        AppToast.error(context, 'Please enter your full name');
-        return;
+        _fullNameError = 'Please enter your full name';
+        hasError = true;
       }
       if (_phoneController.text.trim().isEmpty) {
-        AppToast.error(context, 'Please enter your phone number');
-        return;
+        _phoneError = 'Please enter your phone number';
+        hasError = true;
       }
       if (_locationController.text.trim().isEmpty) {
-        AppToast.error(context, 'Please enter your current location');
+        _locationError = 'Please enter your current location';
+        hasError = true;
+      }
+      if (hasError) {
+        setState(() {});
         return;
       }
       setState(() {
@@ -138,20 +342,40 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
         _currentStep = 2;
       });
     } else if (_currentStep == 2) {
+      bool hasError = false;
       if (_driverMode == null || _driverMode!.isEmpty) {
-        AppToast.error(context, 'Please select your driver mode');
-        return;
+        _driverModeError = 'Please select your driver mode';
+        hasError = true;
       }
       if (_licenseClass == null || _licenseClass!.isEmpty) {
-        AppToast.error(context, 'Please select your license class');
-        return;
+        _licenseClassError = 'Please select your license class';
+        hasError = true;
       }
       if (_experienceYears == null || _experienceYears!.isEmpty) {
-        AppToast.error(context, 'Please select your years of experience');
+        _experienceYearsError = 'Please select your years of experience';
+        hasError = true;
+      }
+      if (hasError) {
+        setState(() {});
         return;
       }
       setState(() => _currentStep = 3);
     } else if (_currentStep == 3) {
+      final hasFront =
+          _licenseFrontFile != null ||
+          (_existingLicenseFrontUrl != null &&
+              _existingLicenseFrontUrl!.isNotEmpty);
+      final hasBack =
+          _licenseBackFile != null ||
+          (_existingLicenseBackUrl != null &&
+              _existingLicenseBackUrl!.isNotEmpty);
+      if (!hasFront || !hasBack) {
+        setState(() {
+          _documentsError =
+              'Driving License (Front & Back) are required for verification.';
+        });
+        return;
+      }
       _submitAllDocuments();
     }
   }
@@ -164,17 +388,135 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
 
   void _submitAllDocuments() async {
     setState(() => _isSubmitting = true);
-    debugPrint('Submitting driver profile: ${_fullNameController.text}, phone: +${_selectedCountry.dialCode}${_phoneController.text}, location: ${_locationController.text}');
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-      Navigator.pop(context);
-      widget.onVerificationComplete();
-      AppToast.success(
-        context,
-        'Compliance verification submitted successfully! All driver features unlocked.',
-        icon: Icons.verified_rounded,
+
+    try {
+      final token = await _getAuthToken();
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.completeProfileSetup}',
       );
+
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Accept'] = 'application/json';
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      // 1. Form Fields
+      request.fields['full_name'] = _fullNameController.text.trim();
+      String num = _phoneController.text.trim();
+      if (num.startsWith('+${_selectedCountry.dialCode}')) {
+        num = num.substring(_selectedCountry.dialCode.length + 1);
+      } else if (num.startsWith(_selectedCountry.dialCode)) {
+        num = num.substring(_selectedCountry.dialCode.length);
+      }
+      request.fields['phone'] = '+${_selectedCountry.dialCode}$num';
+      request.fields['current_location'] = _locationController.text.trim();
+      if (_driverMode != null && _driverMode!.isNotEmpty) {
+        request.fields['driver_mode'] = _driverMode!;
+      }
+      if (_licenseClass != null && _licenseClass!.isNotEmpty) {
+        request.fields['license_class'] = _licenseClass!;
+      }
+      if (_experienceYears != null && _experienceYears!.isNotEmpty) {
+        request.fields['experience_years'] = _experienceYears!;
+      }
+      if (_endorsementsController.text.trim().isNotEmpty) {
+        request.fields['endorsements'] = _endorsementsController.text.trim();
+      }
+      if (_vehicleTypesController.text.trim().isNotEmpty) {
+        request.fields['vehicle_types'] = _vehicleTypesController.text.trim();
+      }
+
+      // 2. File Uploads (only attach if picked and file exists locally)
+      if (_avatarFile?.path != null && File(_avatarFile!.path!).existsSync()) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'profile_picture',
+            _avatarFile!.path!,
+          ),
+        );
+      }
+      if (_licenseFrontFile?.path != null &&
+          File(_licenseFrontFile!.path!).existsSync()) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'license_document',
+            _licenseFrontFile!.path!,
+          ),
+        );
+      }
+      if (_licenseBackFile?.path != null &&
+          File(_licenseBackFile!.path!).existsSync()) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'license_back_document',
+            _licenseBackFile!.path!,
+          ),
+        );
+      }
+      if (_medicalCardFile?.path != null &&
+          File(_medicalCardFile!.path!).existsSync()) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'medical_card_document',
+            _medicalCardFile!.path!,
+          ),
+        );
+      }
+      if (_insuranceFile?.path != null &&
+          File(_insuranceFile!.path!).existsSync()) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'insurance_document',
+            _insuranceFile!.path!,
+          ),
+        );
+      }
+
+      final streamedRes = await request.send().timeout(
+        const Duration(seconds: 40),
+      );
+      final res = await http.Response.fromStream(streamedRes);
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          Navigator.pop(context);
+          widget.onVerificationComplete();
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil(AppRoutes.adminApproval, (route) => false);
+          AppToast.success(
+            context,
+            'Driver profile & compliance documents submitted for Admin review!',
+            icon: Icons.hourglass_top_rounded,
+          );
+        }
+      } else {
+        String errorMsg = 'Failed to submit profile (HTTP ${res.statusCode})';
+        try {
+          final errBody = jsonDecode(res.body);
+          if (errBody['message'] != null) {
+            errorMsg = errBody['message'].toString();
+          } else if (errBody['errors'] != null) {
+            final errs = errBody['errors'] as Map<String, dynamic>;
+            final firstVal = errs.values.first;
+            if (firstVal is List && firstVal.isNotEmpty) {
+              errorMsg = firstVal.first.toString();
+            }
+          }
+        } catch (_) {}
+
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          AppToast.error(context, errorMsg);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        AppToast.error(context, 'Submission error: ${e.toString()}');
+      }
     }
   }
 
@@ -273,25 +615,41 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                       isDense: true,
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(4.0),
-                        borderSide: const BorderSide(color: slate200, width: 1.0),
+                        borderSide: const BorderSide(
+                          color: slate200,
+                          width: 1.0,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(4.0),
-                        borderSide: const BorderSide(color: slate200, width: 1.0),
+                        borderSide: const BorderSide(
+                          color: slate200,
+                          width: 1.0,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(4.0),
-                        borderSide: const BorderSide(color: primaryOrange, width: 1.2),
+                        borderSide: const BorderSide(
+                          color: primaryOrange,
+                          width: 1.2,
+                        ),
                       ),
                     ),
                   ),
                 ),
                 InkWell(
                   onTap: () => setState(() => _isCountryDropdownOpen = false),
-                  child: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: slate500),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: slate500,
+                  ),
                 ),
               ],
             ),
@@ -299,7 +657,9 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
 
           // Scrollable List with light blue selection and scrollbar
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.35,
+            ),
             child: RawScrollbar(
               controller: _countryScrollController,
               thumbVisibility: true,
@@ -324,10 +684,15 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                     },
                     borderRadius: BorderRadius.circular(4.0),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       margin: const EdgeInsets.symmetric(vertical: 1),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFFEBF5FF) : Colors.transparent,
+                        color: isSelected
+                            ? const Color(0xFFEBF5FF)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: Row(
@@ -352,7 +717,9 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                               style: TextStyle(
                                 color: isSelected ? slate900 : slate700,
                                 fontSize: 12.5,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
                               ),
                             ),
                           ),
@@ -382,64 +749,140 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final maxModalHeight = MediaQuery.of(context).size.height * 0.90;
 
-    return Container(
-      constraints: BoxConstraints(maxHeight: maxModalHeight),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            // Drag Handle Pill
-            Container(
-              width: 44,
-              height: 4.5,
-              decoration: BoxDecoration(
-                color: const Color(0xFFCBD5E1),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // 3-Step Horizontal Stepper (Personal Info -> Driver Details -> Documents & Submit)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: _buildStepper(),
-            ),
-            const SizedBox(height: 12),
-            const Divider(color: slate200, height: 1),
-
-            // Dynamic Step Form Body (Scrollable)
-            Flexible(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.only(
-                  left: 20.0,
-                  right: 20.0,
-                  top: 14.0,
-                  bottom: bottomInset + 12.0,
-                ),
-                child: _buildCurrentStepContent(),
-              ),
-            ),
-
-            // Footer Action Bar (without top border line)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
-              child: _buildFooterButtons(),
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 20,
+              offset: Offset(0, -4),
             ),
           ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              // Drag Handle Pill
+              Container(
+                width: 44,
+                height: 4.5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 3-Step Horizontal Stepper (Personal Info -> Driver Details -> Documents & Submit)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: _buildStepper(),
+              ),
+              const SizedBox(height: 12),
+              const Divider(color: slate200, height: 1),
+              if (_isLoadingProfile)
+                const LinearProgressIndicator(
+                  color: primaryOrange,
+                  backgroundColor: primaryOrangeLight,
+                  minHeight: 2.5,
+                ),
+              if (_serverVerificationStatus == 'under_review')
+                Container(
+                  margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.hourglass_top_rounded,
+                        color: Color(0xFFD97706),
+                        size: 16,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Your compliance profile is currently under review by Admin. You may update details and re-submit.',
+                          style: TextStyle(
+                            color: Color(0xFF92400E),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_serverVerificationStatus == 'rejected')
+                Container(
+                  margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFDC2626),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Verification rejected: ${_serverRejectionReason ?? "Please check and re-submit valid documents."}',
+                          style: const TextStyle(
+                            color: Color(0xFF991B1B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Dynamic Step Form Body (Responsive Scrollable without restrictive height limits)
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 14.0,
+                  ),
+                  child: _buildCurrentStepContent(),
+                ),
+              ),
+
+              // Footer Action Bar (without top border line)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20.0,
+                  vertical: 14.0,
+                ),
+                child: _buildFooterButtons(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -473,14 +916,14 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
             color: isDone
                 ? successGreen
                 : isActive
-                    ? primaryOrange
-                    : Colors.white,
+                ? primaryOrange
+                : Colors.white,
             border: Border.all(
               color: isDone
                   ? successGreen
                   : isActive
-                      ? primaryOrange
-                      : slate400,
+                  ? primaryOrange
+                  : slate400,
               width: 1.4,
             ),
           ),
@@ -507,10 +950,12 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
               color: isActive
                   ? primaryOrange
                   : isDone
-                      ? slate700
-                      : slate400,
+                  ? slate700
+                  : slate400,
               fontSize: 11,
-              fontWeight: isActive || isDone ? FontWeight.bold : FontWeight.w500,
+              fontWeight: isActive || isDone
+                  ? FontWeight.bold
+                  : FontWeight.w500,
             ),
           ),
         ),
@@ -554,7 +999,8 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
         _buildStepHeader(
           icon: Icons.person_outline,
           title: 'Personal Information',
-          subtitle: 'Provide your basic contact information and profile details.',
+          subtitle:
+              'Provide your basic contact information and profile details.',
         ),
         const SizedBox(height: 16),
 
@@ -586,8 +1032,28 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                               height: 68,
                               fit: BoxFit.cover,
                             )
+                          : (_existingAvatarUrl != null &&
+                                _existingAvatarUrl!.isNotEmpty)
+                          ? Image.network(
+                              _existingAvatarUrl!,
+                              width: 68,
+                              height: 68,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Center(
+                                    child: Icon(
+                                      Icons.person_rounded,
+                                      size: 36,
+                                      color: slate400,
+                                    ),
+                                  ),
+                            )
                           : const Center(
-                              child: Icon(Icons.person_rounded, size: 36, color: slate400),
+                              child: Icon(
+                                Icons.person_rounded,
+                                size: 36,
+                                color: slate400,
+                              ),
                             ),
                     ),
                   ),
@@ -610,7 +1076,11 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                         ],
                       ),
                       child: const Center(
-                        child: Icon(Icons.camera_alt_rounded, size: 12, color: slate700),
+                        child: Icon(
+                          Icons.camera_alt_rounded,
+                          size: 12,
+                          color: slate700,
+                        ),
                       ),
                     ),
                   ),
@@ -633,9 +1103,17 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
               children: [
                 OutlinedButton.icon(
                   onPressed: _pickProfilePhoto,
-                  icon: const Icon(Icons.file_upload_outlined, size: 15, color: slate700),
+                  icon: const Icon(
+                    Icons.file_upload_outlined,
+                    size: 15,
+                    color: slate700,
+                  ),
                   label: Text(
-                    _avatarFile != null ? 'Change Photo' : 'Upload Photo',
+                    (_avatarFile != null ||
+                            (_existingAvatarUrl != null &&
+                                _existingAvatarUrl!.isNotEmpty))
+                        ? 'Change Photo'
+                        : 'Upload Photo',
                     style: const TextStyle(
                       color: slate900,
                       fontSize: 12,
@@ -644,8 +1122,13 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                   ),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: slate200, width: 1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5.0)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     backgroundColor: Colors.white,
                     elevation: 0,
                   ),
@@ -671,7 +1154,11 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
         _buildTextField(
           controller: _fullNameController,
           hintText: 'Enter your full name',
+          errorText: _fullNameError,
           keyboardType: TextInputType.name,
+          onChanged: (val) {
+            if (_fullNameError != null) setState(() => _fullNameError = null);
+          },
         ),
         const SizedBox(height: 14),
 
@@ -684,7 +1171,9 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
             // Standalone Country Code Box (matching previous UI design)
             InkWell(
               onTap: () {
-                setState(() => _isCountryDropdownOpen = !_isCountryDropdownOpen);
+                setState(
+                  () => _isCountryDropdownOpen = !_isCountryDropdownOpen,
+                );
               },
               borderRadius: BorderRadius.circular(5.0),
               child: Container(
@@ -694,18 +1183,29 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(5.0),
                   border: Border.all(
-                    color: _isCountryDropdownOpen ? primaryOrange : slate200,
-                    width: _isCountryDropdownOpen ? 1.4 : 1.0,
+                    color: _phoneError != null
+                        ? const Color(0xFFDC2626)
+                        : (_isCountryDropdownOpen ? primaryOrange : slate200),
+                    width: (_phoneError != null || _isCountryDropdownOpen)
+                        ? 1.4
+                        : 1.0,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_selectedCountry.flag, style: const TextStyle(fontSize: 16)),
+                    Text(
+                      _selectedCountry.flag,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '+${_selectedCountry.dialCode}',
-                      style: const TextStyle(color: slate900, fontSize: 12.5, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: slate900,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(width: 4),
                     Icon(
@@ -728,21 +1228,41 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                 child: TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  style: const TextStyle(color: slate900, fontSize: 13, fontWeight: FontWeight.w500),
+                  onChanged: (val) {
+                    if (_phoneError != null) setState(() => _phoneError = null);
+                  },
+                  style: const TextStyle(
+                    color: slate900,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Enter phone number',
                     hintStyle: const TextStyle(color: slate400, fontSize: 12.5),
                     filled: true,
                     fillColor: Colors.white,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 11,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(5.0),
-                      borderSide: const BorderSide(color: slate200, width: 1.0),
+                      borderSide: BorderSide(
+                        color: _phoneError != null
+                            ? const Color(0xFFDC2626)
+                            : slate200,
+                        width: _phoneError != null ? 1.2 : 1.0,
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(5.0),
-                      borderSide: const BorderSide(color: primaryOrange, width: 1.4),
+                      borderSide: BorderSide(
+                        color: _phoneError != null
+                            ? const Color(0xFFDC2626)
+                            : primaryOrange,
+                        width: 1.4,
+                      ),
                     ),
                   ),
                 ),
@@ -750,6 +1270,17 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
             ),
           ],
         ),
+        if (_phoneError != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            _phoneError!,
+            style: const TextStyle(
+              color: Color(0xFFDC2626),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
 
         // Country Code Dropdown Menu (Preview matching previous sleek UI)
         if (_isCountryDropdownOpen) ...[
@@ -773,10 +1304,17 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                     const SizedBox(
                       width: 10,
                       height: 10,
-                      child: CircularProgressIndicator(strokeWidth: 1.5, color: primaryOrange),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: primaryOrange,
+                      ),
                     )
                   else
-                    const Icon(Icons.location_on, size: 12, color: primaryOrange),
+                    const Icon(
+                      Icons.location_on,
+                      size: 12,
+                      color: primaryOrange,
+                    ),
                   const SizedBox(width: 3),
                   const Text(
                     'Google Map',
@@ -795,30 +1333,45 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
         _buildTextField(
           controller: _locationController,
           focusNode: _locationFocusNode,
-          onChanged: _onLocationChanged,
+          errorText: _locationError,
+          onChanged: (val) {
+            if (_locationError != null) setState(() => _locationError = null);
+            _onLocationChanged(val);
+          },
           hintText: 'Search city, state, country or address...',
-          prefixIcon: const Icon(Icons.location_on_outlined, size: 16, color: slate400),
+          prefixIcon: const Icon(
+            Icons.location_on_outlined,
+            size: 16,
+            color: slate400,
+          ),
           suffixIcon: _isLoadingSuggestions
               ? const Padding(
                   padding: EdgeInsets.all(12),
                   child: SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: primaryOrange),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: primaryOrange,
+                    ),
                   ),
                 )
               : _locationController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, size: 16, color: slate400),
-                      onPressed: () {
-                        setState(() {
-                          _locationController.clear();
-                          _locationSuggestions = [];
-                          _isLoadingSuggestions = false;
-                        });
-                      },
-                    )
-                  : null,
+              ? IconButton(
+                  icon: const Icon(
+                    Icons.clear_rounded,
+                    size: 16,
+                    color: slate400,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _locationController.clear();
+                      _locationSuggestions = [];
+                      _isLoadingSuggestions = false;
+                    });
+                  },
+                )
+              : null,
           keyboardType: TextInputType.streetAddress,
         ),
         if (_locationSuggestions.isNotEmpty) ...[
@@ -857,7 +1410,11 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.travel_explore_rounded, size: 14, color: primaryOrange),
+                const Icon(
+                  Icons.travel_explore_rounded,
+                  size: 14,
+                  color: primaryOrange,
+                ),
                 const SizedBox(width: 6),
                 const Text(
                   'Google Maps Suggestions',
@@ -875,19 +1432,26 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                       _locationSuggestions = [];
                     });
                   },
-                  child: const Icon(Icons.close_rounded, size: 14, color: slate400),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: slate400,
+                  ),
                 ),
               ],
             ),
           ),
           // Suggestions List
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 200),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.35,
+            ),
             child: ListView.separated(
               shrinkWrap: true,
               padding: EdgeInsets.zero,
               itemCount: _locationSuggestions.length,
-              separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              separatorBuilder: (context, index) =>
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
               itemBuilder: (context, index) {
                 final place = _locationSuggestions[index];
                 return InkWell(
@@ -900,7 +1464,10 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                     _locationFocusNode.unfocus();
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8.5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8.5,
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -981,7 +1548,8 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
         _buildStepHeader(
           icon: Icons.local_shipping_outlined,
           title: 'Driver Experience & License Details',
-          subtitle: 'Specify your driving qualifications, CDL class, and experience.',
+          subtitle:
+              'Specify your driving qualifications, CDL class, and experience.',
         ),
         const SizedBox(height: 16),
 
@@ -992,7 +1560,13 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
           value: _driverMode,
           hint: 'Select driver mode',
           items: driverModeOptions,
-          onChanged: (val) => setState(() => _driverMode = val),
+          errorText: _driverModeError,
+          onChanged: (val) {
+            setState(() {
+              _driverMode = val;
+              _driverModeError = null;
+            });
+          },
         ),
         const SizedBox(height: 14),
 
@@ -1003,18 +1577,33 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
           value: _licenseClass,
           hint: 'Select license class',
           items: licenseClassOptions,
-          onChanged: (val) => setState(() => _licenseClass = val),
+          errorText: _licenseClassError,
+          onChanged: (val) {
+            setState(() {
+              _licenseClass = val;
+              _licenseClassError = null;
+            });
+          },
         ),
         const SizedBox(height: 14),
 
         // Years of Driving Experience Dropdown
-        _buildFieldLabel(label: 'Years of Driving Experience', isRequired: true),
+        _buildFieldLabel(
+          label: 'Years of Driving Experience',
+          isRequired: true,
+        ),
         const SizedBox(height: 5),
         _CustomMinimalDropdown(
           value: _experienceYears,
           hint: 'Select years',
           items: experienceOptions,
-          onChanged: (val) => setState(() => _experienceYears = val),
+          errorText: _experienceYearsError,
+          onChanged: (val) {
+            setState(() {
+              _experienceYears = val;
+              _experienceYearsError = null;
+            });
+          },
         ),
         const SizedBox(height: 14),
 
@@ -1052,6 +1641,37 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
           title: 'Upload Verification Documents',
           subtitle: 'Please upload the required documents below. Make sure all documents are clear, readable and not expired.',
         ),
+        if (_documentsError != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: const Color(0xFFFECACA)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 16,
+                  color: Color(0xFFDC2626),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _documentsError!,
+                    style: const TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
 
         // Document Cards Grid (2x2 on mobile)
@@ -1066,10 +1686,22 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                 iconBg: primaryOrangeLight,
                 isRequired: true,
                 file: _licenseFrontFile,
+                existingUrl: _existingLicenseFrontUrl,
                 uploadSubtitle: 'JPG, PNG or PDF',
                 onPick: () async {
-                  final f = await FileUploadHelper.pickFileOrPhoto(context, title: 'Upload License Front Side');
-                  if (f != null) setState(() => _licenseFrontFile = f);
+                  final f = await FileUploadHelper.pickFileOrPhoto(
+                    context,
+                    title: 'Upload License Front Side',
+                  );
+                  if (f != null) {
+                    setState(() {
+                      _licenseFrontFile = f;
+                      if (_licenseBackFile != null ||
+                          _existingLicenseBackUrl != null) {
+                        _documentsError = null;
+                      }
+                    });
+                  }
                 },
                 onRemove: () => setState(() => _licenseFrontFile = null),
               ),
@@ -1084,10 +1716,22 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                 iconBg: primaryOrangeLight,
                 isRequired: true,
                 file: _licenseBackFile,
+                existingUrl: _existingLicenseBackUrl,
                 uploadSubtitle: 'JPG, PNG or PDF',
                 onPick: () async {
-                  final f = await FileUploadHelper.pickFileOrPhoto(context, title: 'Upload License Back Side');
-                  if (f != null) setState(() => _licenseBackFile = f);
+                  final f = await FileUploadHelper.pickFileOrPhoto(
+                    context,
+                    title: 'Upload License Back Side',
+                  );
+                  if (f != null) {
+                    setState(() {
+                      _licenseBackFile = f;
+                      if (_licenseFrontFile != null ||
+                          _existingLicenseFrontUrl != null) {
+                        _documentsError = null;
+                      }
+                    });
+                  }
                 },
                 onRemove: () => setState(() => _licenseBackFile = null),
               ),
@@ -1107,9 +1751,13 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                 iconBg: const Color(0xFFEFF6FF),
                 badge: 'Optional',
                 file: _medicalCardFile,
+                existingUrl: _existingMedicalCardUrl,
                 uploadSubtitle: 'DOT Card / PDF',
                 onPick: () async {
-                  final f = await FileUploadHelper.pickFileOrPhoto(context, title: 'Upload Medical Certificate');
+                  final f = await FileUploadHelper.pickFileOrPhoto(
+                    context,
+                    title: 'Upload Medical Certificate',
+                  );
                   if (f != null) setState(() => _medicalCardFile = f);
                 },
                 onRemove: () => setState(() => _medicalCardFile = null),
@@ -1125,9 +1773,13 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                 iconBg: const Color(0xFFEFF6FF),
                 badge: 'Optional',
                 file: _insuranceFile,
+                existingUrl: _existingInsuranceUrl,
                 uploadSubtitle: 'Insurance PDF',
                 onPick: () async {
-                  final f = await FileUploadHelper.pickFileOrPhoto(context, title: 'Upload Insurance Document');
+                  final f = await FileUploadHelper.pickFileOrPhoto(
+                    context,
+                    title: 'Upload Insurance Document',
+                  );
                   if (f != null) setState(() => _insuranceFile = f);
                 },
                 onRemove: () => setState(() => _insuranceFile = null),
@@ -1178,19 +1830,23 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
     bool isRequired = false,
     String? badge,
     required UploadedFileInfo? file,
+    String? existingUrl,
     required String uploadSubtitle,
     required VoidCallback onPick,
     required VoidCallback onRemove,
   }) {
     final hasFile = file != null;
+    final hasExisting = existingUrl != null && existingUrl.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(5.0),
+        borderRadius: BorderRadius.circular(4.0),
         border: Border.all(
-          color: hasFile ? successGreen.withValues(alpha: 0.6) : slate200,
+          color: (hasFile || hasExisting)
+              ? successGreen.withValues(alpha: 0.6)
+              : slate200,
           width: 1,
         ),
       ),
@@ -1207,9 +1863,7 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                   color: iconBg,
                   borderRadius: BorderRadius.circular(5.0),
                 ),
-                child: Center(
-                  child: Icon(icon, size: 13, color: iconColor),
-                ),
+                child: Center(child: Icon(icon, size: 13, color: iconColor)),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -1223,8 +1877,6 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                         Flexible(
                           child: Text(
                             title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: slate900,
                               fontSize: 10.5,
@@ -1233,20 +1885,34 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                           ),
                         ),
                         if (isRequired)
-                          const Text(' *', style: TextStyle(color: primaryOrange, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          const Text(
+                            ' *',
+                            style: TextStyle(
+                              color: primaryOrange,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                       ],
                     ),
                     if (badge != null) ...[
                       const SizedBox(height: 2),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 0.5,
+                        ),
                         decoration: BoxDecoration(
                           color: slate100,
                           borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
                           badge,
-                          style: const TextStyle(color: slate500, fontSize: 8, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: slate500,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -1273,7 +1939,11 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.check_circle_rounded, size: 22, color: successGreen),
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          size: 22,
+                          color: successGreen,
+                        ),
                         const SizedBox(height: 3),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -1281,7 +1951,11 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                             file.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: slate900, fontSize: 10, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              color: slate900,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -1298,7 +1972,83 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                           color: slate700,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close_rounded, size: 10, color: Colors.white),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 10,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (hasExisting)
+            Container(
+              height: 72,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(5.0),
+                border: Border.all(color: const Color(0xFF86EFAC)),
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 20,
+                          color: successGreen,
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Uploaded on Server',
+                          style: TextStyle(
+                            color: successGreen,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                          child: Text(
+                            existingUrl.split('/').last,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: slate600,
+                              fontSize: 8.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: InkWell(
+                      onTap: onPick,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: primaryOrange,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: const Text(
+                          'Replace',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1324,11 +2074,19 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.cloud_upload_outlined, size: 18, color: slate400),
+                      const Icon(
+                        Icons.cloud_upload_outlined,
+                        size: 18,
+                        color: slate400,
+                      ),
                       const SizedBox(height: 3),
                       const Text(
                         'Upload File',
-                        style: TextStyle(color: slate700, fontSize: 10.5, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: slate700,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         uploadSubtitle,
@@ -1361,9 +2119,7 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
             borderRadius: BorderRadius.circular(5.0),
             border: Border.all(color: primaryOrangeBorder),
           ),
-          child: Center(
-            child: Icon(icon, size: 18, color: primaryOrange),
-          ),
+          child: Center(child: Icon(icon, size: 18, color: primaryOrange)),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -1381,10 +2137,7 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  color: slate500,
-                  fontSize: 11,
-                ),
+                style: const TextStyle(color: slate500, fontSize: 11),
               ),
             ],
           ),
@@ -1418,10 +2171,11 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
     );
   }
 
-  // --- Minimal TextField with 5px radius ---
+  // --- Minimal TextField with 5px radius & inline error support ---
   Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
+    String? errorText,
     Widget? prefixIcon,
     Widget? suffixIcon,
     ValueChanged<String>? onChanged,
@@ -1433,19 +2187,43 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
       focusNode: focusNode,
       onChanged: onChanged,
       keyboardType: keyboardType,
-      style: const TextStyle(color: slate900, fontSize: 13, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        color: slate900,
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(color: slate400, fontSize: 12.5),
+        errorText: errorText,
+        errorStyle: const TextStyle(
+          color: Color(0xFFDC2626),
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
         filled: true,
         fillColor: Colors.white,
         prefixIcon: prefixIcon,
         suffixIcon: suffixIcon,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 11,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(5.0),
-          borderSide: const BorderSide(color: slate200, width: 1),
+          borderSide: BorderSide(
+            color: errorText != null ? const Color(0xFFDC2626) : slate200,
+            width: 1,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(5.0),
+          borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(5.0),
+          borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.4),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(5.0),
@@ -1454,8 +2232,6 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
       ),
     );
   }
-
-
 
   // --- Footer Buttons (5px radius) ---
   Widget _buildFooterButtons() {
@@ -1470,12 +2246,18 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
               style: TextButton.styleFrom(
                 backgroundColor: const Color(0xFFF1F5F9),
                 foregroundColor: slate700,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5.0)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5.0),
+                ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
               child: const Text(
                 'Back',
-                style: TextStyle(color: slate700, fontSize: 12.5, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: slate700,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -1489,12 +2271,18 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
               style: TextButton.styleFrom(
                 backgroundColor: const Color(0xFFF1F5F9),
                 foregroundColor: slate600,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5.0)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5.0),
+                ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
               child: const Text(
                 'Cancel',
-                style: TextStyle(color: slate600, fontSize: 12.5, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: slate600,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -1508,21 +2296,29 @@ class _DocumentVerificationModalState extends State<DocumentVerificationModal> {
               backgroundColor: primaryOrange,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5.0)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(5.0),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 18),
             ),
             child: _isSubmitting
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         _currentStep < 3 ? 'Next' : 'Submit for Verification',
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       if (_currentStep < 3) ...[
                         const SizedBox(width: 4),
@@ -1560,7 +2356,12 @@ class _DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(strokeWidth / 2, strokeWidth / 2, size.width - strokeWidth, size.height - strokeWidth),
+      Rect.fromLTWH(
+        strokeWidth / 2,
+        strokeWidth / 2,
+        size.width - strokeWidth,
+        size.height - strokeWidth,
+      ),
       Radius.circular(radius),
     );
     final path = Path()..addRRect(rrect);
@@ -1568,7 +2369,9 @@ class _DashedBorderPainter extends CustomPainter {
     for (final metric in path.computeMetrics()) {
       double distance = 0.0;
       while (distance < metric.length) {
-        final length = (distance + dash < metric.length) ? dash : metric.length - distance;
+        final length = (distance + dash < metric.length)
+            ? dash
+            : metric.length - distance;
         canvas.drawPath(metric.extractPath(distance, distance + length), paint);
         distance += dash + gap;
       }
@@ -1587,19 +2390,19 @@ class _DashedBorderPainter extends CustomPainter {
 // Helper Models & Minimal Dropdown Widget (Matching Web / Design Aesthetic)
 // =============================================================================
 
-
-
 class _CustomMinimalDropdown extends StatefulWidget {
   final String? value;
   final String hint;
   final List<String> items;
   final ValueChanged<String> onChanged;
+  final String? errorText;
 
   const _CustomMinimalDropdown({
     required this.value,
     required this.hint,
     required this.items,
     required this.onChanged,
+    this.errorText,
   });
 
   @override
@@ -1626,39 +2429,63 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
     const Color softBlue = Color(0xFFEBF5FF);
 
     if (!_isOpen) {
-      return InkWell(
-        onTap: () => setState(() => _isOpen = true),
-        borderRadius: BorderRadius.circular(5.0),
-        child: Container(
-          height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isOpen = true),
             borderRadius: BorderRadius.circular(5.0),
-            border: Border.all(color: slate200),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  widget.value ?? widget.hint,
-                  style: TextStyle(
-                    color: widget.value != null ? slate900 : slate400,
-                    fontSize: 12.5,
-                    fontWeight: widget.value != null ? FontWeight.w500 : FontWeight.normal,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+            child: Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(5.0),
+                border: Border.all(
+                  color: widget.errorText != null
+                      ? const Color(0xFFDC2626)
+                      : slate200,
+                  width: widget.errorText != null ? 1.2 : 1.0,
                 ),
               ),
-              const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 18,
-                color: slate500,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.value ?? widget.hint,
+                      style: TextStyle(
+                        color: widget.value != null ? slate900 : slate400,
+                        fontSize: 12.5,
+                        fontWeight: widget.value != null
+                            ? FontWeight.w500
+                            : FontWeight.normal,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: slate500,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          if (widget.errorText != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              widget.errorText!,
+              style: const TextStyle(
+                color: Color(0xFFDC2626),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
       );
     }
 
@@ -1668,11 +2495,7 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
         borderRadius: BorderRadius.circular(5.0),
         border: Border.all(color: slate200),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -1682,7 +2505,9 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
           // Top row (showing hint and chevron down, exactly matching screenshot)
           InkWell(
             onTap: () => setState(() => _isOpen = false),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(5.0)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(5.0),
+            ),
             child: Container(
               height: 42,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1695,10 +2520,7 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
                   Expanded(
                     child: Text(
                       widget.hint,
-                      style: const TextStyle(
-                        color: slate400,
-                        fontSize: 12.5,
-                      ),
+                      style: const TextStyle(color: slate400, fontSize: 12.5),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -1714,7 +2536,9 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
 
           // Scrollable dropdown options with soft-blue highlight and sleek scrollbar
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.35,
+            ),
             child: RawScrollbar(
               controller: _scrollController,
               thumbVisibility: true,
@@ -1738,7 +2562,10 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
                     borderRadius: BorderRadius.circular(4.0),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8.5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8.5,
+                      ),
                       margin: const EdgeInsets.symmetric(vertical: 1),
                       decoration: BoxDecoration(
                         color: isSelected ? softBlue : Colors.transparent,
@@ -1749,7 +2576,9 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
                         style: TextStyle(
                           color: isSelected ? slate900 : slate700,
                           fontSize: 12.5,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
                         ),
                       ),
                     ),
@@ -1763,4 +2592,3 @@ class _CustomMinimalDropdownState extends State<_CustomMinimalDropdown> {
     );
   }
 }
-

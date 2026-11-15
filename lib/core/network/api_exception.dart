@@ -1,7 +1,11 @@
 import '../errors/app_exception.dart';
 
 class ApiException extends AppException {
-  ApiException(super.message, {super.statusCode, super.prefix = 'API Exception'});
+  ApiException(
+    super.message, {
+    super.statusCode,
+    super.prefix = 'API Exception',
+  });
 
   factory ApiException.fromStatusCode(int statusCode, String message) {
     switch (statusCode) {

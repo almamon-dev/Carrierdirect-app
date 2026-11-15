@@ -1,11 +1,23 @@
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
+
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/utils/file_upload_helper.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final String? initialName;
+  final String? initialPhone;
+  final String? initialEmail;
+  final String? initialAddress;
+
+  const EditProfileScreen({
+    super.key,
+    this.initialName,
+    this.initialPhone,
+    this.initialEmail,
+    this.initialAddress,
+  });
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -15,14 +27,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
-  late final TextEditingController _nameController = TextEditingController(text: 'Driver Captain');
-  late final TextEditingController _phoneController = TextEditingController(text: '5552348901');
-  late final TextEditingController _emailController = TextEditingController(text: 'amon193p@gmail.com');
-  late final TextEditingController _addressController = TextEditingController(text: '742 Evergreen Terrace, Dallas, TX 75201');
-  late final TextEditingController _cdlController = TextEditingController(text: 'TX-CDL-89420-A');
-  late final TextEditingController _dotMedController = TextEditingController(text: 'DOT-MED-993841');
-  late final TextEditingController _insuranceController = TextEditingController(text: 'INS-POL-49201');
-  late final TextEditingController _emergencyController = TextEditingController(text: 'Sarah Jenkins • +1 555-019-3344');
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _cdlController;
+  late final TextEditingController _dotMedController;
+  late final TextEditingController _insuranceController;
+  late final TextEditingController _emergencyController;
 
   String _selectedCountryFlag = '🇺🇸';
   String _selectedCountryCode = '+1';
@@ -34,6 +46,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   static const Color textLabel = AppColors.textPrimary;
   static const Color textMuted = AppColors.textSecondary;
   static const Color textMain = AppColors.textPrimary;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: widget.initialName ?? 'Driver Captain',
+    );
+
+    String phone = widget.initialPhone ?? '5552348901';
+    if (phone.startsWith('+880') || phone.startsWith('880')) {
+      _selectedCountryCode = '+880';
+      _selectedCountryFlag = '🇧🇩';
+      phone = phone.replaceFirst(RegExp(r'^\+?880'), '');
+      if (!phone.startsWith('0') && phone.length == 10) phone = '0$phone';
+    } else if (phone.startsWith('+1')) {
+      _selectedCountryCode = '+1';
+      _selectedCountryFlag = '🇺🇸';
+      phone = phone.replaceFirst(RegExp(r'^\+1'), '');
+    }
+
+    _phoneController = TextEditingController(text: phone);
+    _emailController = TextEditingController(
+      text: widget.initialEmail ?? 'balbrigganconnected@gmail.com',
+    );
+    _addressController = TextEditingController(
+      text: widget.initialAddress ?? '742 Evergreen Terrace, Dallas, TX 75201',
+    );
+    _cdlController = TextEditingController(text: 'TX-CDL-89420-A');
+    _dotMedController = TextEditingController(text: 'DOT-MED-993841');
+    _insuranceController = TextEditingController(text: 'INS-POL-49201');
+    _emergencyController = TextEditingController(
+      text: 'Sarah Jenkins • +1 555-019-3344',
+    );
+  }
 
   @override
   void dispose() {
@@ -50,7 +96,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   void _saveProfile() {
     if (_formKey.currentState?.validate() ?? false) {
-      AppToast.success(context, 'Profile and driver credentials updated successfully!');
+      AppToast.success(
+        context,
+        'Profile and driver credentials updated successfully!',
+      );
       Navigator.of(context).pop();
     }
   }
@@ -69,10 +118,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         inputDecoration: InputDecoration(
           hintText: 'Search country name or code...',
           hintStyle: const TextStyle(color: textMuted, fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded, color: textMuted, size: 20),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: textMuted,
+            size: 20,
+          ),
           filled: true,
           fillColor: const Color(0xFFF0F2F5),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: inputBorder),
@@ -170,19 +226,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     title.toUpperCase(),
-                                    style: const TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      color: primaryColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                   const Row(
                                     children: [
-                                      Icon(Icons.verified_rounded, size: 14, color: Color(0xFF059669)),
+                                      Icon(
+                                        Icons.verified_rounded,
+                                        size: 14,
+                                        color: Color(0xFF059669),
+                                      ),
                                       SizedBox(width: 4),
                                       Text(
                                         'VERIFIED',
-                                        style: TextStyle(color: Color(0xFF059669), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          color: Color(0xFF059669),
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -192,44 +261,101 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               const Divider(color: inputBorder, height: 1),
                               const SizedBox(height: 14),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text('HOLDER', style: TextStyle(color: textMuted, fontSize: 10.5)),
+                                      Text(
+                                        'HOLDER',
+                                        style: TextStyle(
+                                          color: textMuted,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
                                       SizedBox(height: 2),
-                                      Text('Driver Captain', style: TextStyle(color: textMain, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Driver Captain',
+                                        style: TextStyle(
+                                          color: textMain,
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Text('NUMBER', style: TextStyle(color: textMuted, fontSize: 10.5)),
+                                      const Text(
+                                        'NUMBER',
+                                        style: TextStyle(
+                                          color: textMuted,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
                                       SizedBox(height: 2),
-                                      Text(docNumber, style: const TextStyle(color: textMain, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        docNumber,
+                                        style: const TextStyle(
+                                          color: textMain,
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 12),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text('ISSUING AUTH', style: TextStyle(color: textMuted, fontSize: 10.5)),
+                                      Text(
+                                        'ISSUING AUTH',
+                                        style: TextStyle(
+                                          color: textMuted,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
                                       SizedBox(height: 2),
-                                      Text('Texas DOT / FMCSA', style: TextStyle(color: textMain, fontSize: 12.5)),
+                                      Text(
+                                        'Texas DOT / FMCSA',
+                                        style: TextStyle(
+                                          color: textMain,
+                                          fontSize: 12.5,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Text('EXPIRES', style: TextStyle(color: textMuted, fontSize: 10.5)),
+                                      const Text(
+                                        'EXPIRES',
+                                        style: TextStyle(
+                                          color: textMuted,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
                                       SizedBox(height: 2),
-                                      Text(expiry, style: const TextStyle(color: Color(0xFF059669), fontSize: 12.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        expiry,
+                                        style: const TextStyle(
+                                          color: Color(0xFF059669),
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -243,26 +369,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           height: 46,
                           child: OutlinedButton.icon(
                             onPressed: () async {
-                              final messenger = ScaffoldMessenger.of(context);
                               Navigator.pop(ctx);
-                              final file = await FileUploadHelper.pickFileOrPhoto(
-                                context,
-                                title: 'Upload / Replace $title',
-                              );
-                              if (file != null) {
-                                messenger.showSnackBar(
-                                  SnackBar(content: Text('Document updated: ${file.name}')),
+                              final file =
+                                  await FileUploadHelper.pickFileOrPhoto(
+                                    context,
+                                    title: 'Upload / Replace $title',
+                                  );
+                              if (file != null && mounted) {
+                                AppToast.success(
+                                  context,
+                                  'Document updated: ${file.name}',
                                 );
                               }
                             },
-                            icon: const Icon(Icons.upload_file_rounded, size: 16, color: primaryColor),
+                            icon: const Icon(
+                              Icons.upload_file_rounded,
+                              size: 16,
+                              color: primaryColor,
+                            ),
                             label: const Text(
                               'Upload / Replace Document',
-                              style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: primaryColor, width: 1.2),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              side: const BorderSide(
+                                color: primaryColor,
+                                width: 1.2,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                           ),
                         ),
@@ -288,7 +428,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           children: [
             // Top App Bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -302,7 +445,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         },
                         child: const Padding(
                           padding: EdgeInsets.only(right: 14.0),
-                          child: Icon(Icons.arrow_back, size: 22, color: Color(0xFF0F172A)),
+                          child: Icon(
+                            Icons.arrow_back,
+                            size: 22,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
                       ),
                       const Text(
@@ -319,7 +466,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   GestureDetector(
                     onTap: _saveProfile,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
                         color: primaryColor,
                         borderRadius: BorderRadius.circular(6.0),
@@ -333,7 +483,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       child: const Text(
                         'Save',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -345,7 +499,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -363,18 +520,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: primaryColor.withValues(alpha: 0.12),
-                                    border: Border.all(color: primaryColor, width: 2.5),
+                                    border: Border.all(
+                                      color: primaryColor,
+                                      width: 2.5,
+                                    ),
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(43),
                                     child: Image.asset(
                                       'assets/images/driver_avatar.png',
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Center(
-                                          child: Icon(Icons.person_rounded, size: 50, color: primaryColor),
-                                        );
-                                      },
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                            return const Center(
+                                              child: Icon(
+                                                Icons.person_rounded,
+                                                size: 50,
+                                                color: primaryColor,
+                                              ),
+                                            );
+                                          },
                                     ),
                                   ),
                                 ),
@@ -384,14 +549,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   right: 0,
                                   child: GestureDetector(
                                     onTap: () async {
-                                      final messenger = ScaffoldMessenger.of(context);
-                                      final file = await FileUploadHelper.pickFileOrPhoto(
-                                        context,
-                                        title: 'Update Profile Photo',
-                                      );
-                                      if (file != null) {
-                                        messenger.showSnackBar(
-                                          SnackBar(content: Text('Profile photo updated: ${file.name}')),
+                                      final file =
+                                          await FileUploadHelper.pickFileOrPhoto(
+                                            context,
+                                            title: 'Update Profile Photo',
+                                          );
+                                      if (file != null && context.mounted) {
+                                        AppToast.success(
+                                          context,
+                                          'Profile photo updated: ${file.name}',
                                         );
                                       }
                                     },
@@ -400,9 +566,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       decoration: BoxDecoration(
                                         color: primaryColor,
                                         shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 2),
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
                                       ),
-                                      child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                                      child: const Icon(
+                                        Icons.camera_alt_rounded,
+                                        size: 14,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -414,7 +587,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               children: [
                                 Text(
                                   'Driver Captain',
-                                  style: TextStyle(color: textMain, fontSize: 16, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: textMain,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 SizedBox(width: 5),
                                 Icon(
@@ -427,7 +604,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             const SizedBox(height: 3),
                             const Text(
                               'CarrierDirect ID: #DRV-84920 • Level 1 Verified Driver',
-                              style: TextStyle(color: textMuted, fontSize: 11.5),
+                              style: TextStyle(
+                                color: textMuted,
+                                fontSize: 11.5,
+                              ),
                             ),
                           ],
                         ),
@@ -491,7 +671,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         controller: _cdlController,
                         icon: Icons.badge_outlined,
                         suffixIcon: IconButton(
-                          icon: const Icon(Icons.visibility_outlined, color: Color(0xFF0284C7), size: 20),
+                          icon: const Icon(
+                            Icons.visibility_outlined,
+                            color: Color(0xFF0284C7),
+                            size: 20,
+                          ),
                           tooltip: 'View Document',
                           onPressed: () {
                             _openDocumentPreviewModal(
@@ -511,7 +695,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         controller: _dotMedController,
                         icon: Icons.medical_services_outlined,
                         suffixIcon: IconButton(
-                          icon: const Icon(Icons.visibility_outlined, color: Color(0xFF0284C7), size: 20),
+                          icon: const Icon(
+                            Icons.visibility_outlined,
+                            color: Color(0xFF0284C7),
+                            size: 20,
+                          ),
                           tooltip: 'View Document',
                           onPressed: () {
                             _openDocumentPreviewModal(
@@ -531,7 +719,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         controller: _insuranceController,
                         icon: Icons.shield_outlined,
                         suffixIcon: IconButton(
-                          icon: const Icon(Icons.visibility_outlined, color: Color(0xFF0284C7), size: 20),
+                          icon: const Icon(
+                            Icons.visibility_outlined,
+                            color: Color(0xFF0284C7),
+                            size: 20,
+                          ),
                           tooltip: 'View Document',
                           onPressed: () {
                             _openDocumentPreviewModal(
@@ -569,7 +761,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           child: const Text(
                             'Save Changes',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
@@ -609,7 +804,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
-          style: const TextStyle(color: textMain, fontSize: 14, fontWeight: FontWeight.w500),
+          style: const TextStyle(
+            color: textMain,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
           validator: (val) {
             if (val == null || val.trim().isEmpty) {
               return 'Please enter $label';
@@ -623,7 +822,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             fillColor: inputBg,
             prefixIcon: Icon(icon, color: primaryColor, size: 18),
             suffixIcon: suffixIcon,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 15,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: inputBorder, width: 1),
@@ -671,7 +873,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               GestureDetector(
                 onTap: () => _openCountryPickerModal(context),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -689,21 +894,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: textMuted),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 16,
+                        color: textMuted,
+                      ),
                     ],
                   ),
                 ),
               ),
-              Container(
-                height: 24,
-                width: 1,
-                color: inputBorder,
-              ),
+              Container(height: 24, width: 1, color: inputBorder),
               Expanded(
                 child: TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  style: const TextStyle(color: textMain, fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    color: textMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
                       return 'Please enter phone number';
@@ -716,7 +925,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 15,
+                    ),
                   ),
                 ),
               ),

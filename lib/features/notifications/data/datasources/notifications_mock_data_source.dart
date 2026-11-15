@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/notification_model.dart';
 
 class NotificationsMockDataSource {
@@ -7,8 +8,7 @@ class NotificationsMockDataSource {
       id: 'notif_1',
       title: 'Dock Door #4 Assigned for Pickup',
       message: 'ABC Warehouse Logistics assigned Bay 4. Security seal #SEAL-88902 verified.',
-      detailedBody:
-          'Security clearance confirmed at South Gate Checkpoint #2. Trailer #TR-402 is authorized to back into Bay 4 for cargo loading. Warehouse dock lead David Miller is on-site to assist with pallet staging and physical seal verification.',
+      detailedBody: 'Security clearance confirmed at South Gate Checkpoint #2. Trailer #TR-402 is authorized to back into Bay 4 for cargo loading. Warehouse dock lead David Miller is on-site to assist with pallet staging and physical seal verification.',
       timestamp: DateTime.now().subtract(const Duration(minutes: 12)),
       category: NotificationCategory.dockSecurity,
       priority: NotificationPriority.urgent,
@@ -25,8 +25,7 @@ class NotificationsMockDataSource {
       id: 'notif_2',
       title: 'Signed Digital BOL #BOL-88902 Verified',
       message: 'Official electronic freight manifest signed and handed over.',
-      detailedBody:
-          'The shipper agent David Miller has digitally signed and verified Bill of Lading #BOL-88902-US. 20 refrigerated pallets (18,400 lbs total weight) are confirmed loaded. You can now view and download the official PDF manifest.',
+      detailedBody: 'The shipper agent David Miller has digitally signed and verified Bill of Lading #BOL-88902-US. 20 refrigerated pallets (18,400 lbs total weight) are confirmed loaded. You can now view and download the official PDF manifest.',
       timestamp: DateTime.now().subtract(const Duration(minutes: 48)),
       category: NotificationCategory.paperworkBol,
       priority: NotificationPriority.success,
@@ -43,8 +42,7 @@ class NotificationsMockDataSource {
       id: 'notif_3',
       title: 'I-95 South Severe Congestion Alert (+25 min)',
       message: 'Heavy traffic reported near Exit 14. Detour via Route 9W recommended.',
-      detailedBody:
-          'State DOT traffic radar has detected a multi-lane bottleneck on I-95 South approaching Exit 14 due to construction. To maintain your on-time delivery ETA of 04:30 PM at Starlight Supermarket Central, automated GPS rerouting is available via Route 9W.',
+      detailedBody: 'State DOT traffic radar has detected a multi-lane bottleneck on I-95 South approaching Exit 14 due to construction. To maintain your on-time delivery ETA of 04:30 PM at Starlight Supermarket Central, automated GPS rerouting is available via Route 9W.',
       timestamp: DateTime.now().subtract(const Duration(hours: 1, minutes: 20)),
       category: NotificationCategory.trafficAlert,
       priority: NotificationPriority.important,
@@ -60,8 +58,7 @@ class NotificationsMockDataSource {
       id: 'notif_4',
       title: 'New Refrigerated Load #SHP-987654 Assigned',
       message: 'Pickup at ABC Warehouse → Delivery to Starlight Supermarket Central.',
-      detailedBody:
-          'Logistics Desk #204 has assigned Load #SHP-987654 to your semi-truck. Commodity: Refrigerated Dairy & Frozen Bakery Goods (18,400 lbs, Reefer temp set to -18°C). Distance: 42.8 km. Estimated drive time: 1 hr 15 mins.',
+      detailedBody: 'Logistics Desk #204 has assigned Load #SHP-987654 to your semi-truck. Commodity: Refrigerated Dairy & Frozen Bakery Goods (18,400 lbs, Reefer temp set to -18°C). Distance: 42.8 km. Estimated drive time: 1 hr 15 mins.',
       timestamp: DateTime.now().subtract(const Duration(hours: 3)),
       category: NotificationCategory.loadAssignment,
       priority: NotificationPriority.important,
@@ -77,8 +74,7 @@ class NotificationsMockDataSource {
       id: 'notif_5',
       title: 'Pre-Trip DVIR Inspection Completed',
       message: 'Daily vehicle inspection report confirmed safe for highway operation.',
-      detailedBody:
-          'Your electronic DVIR pre-trip inspection log for Tractor #TR-402 and 53ft Reefer Trailer has been successfully transmitted to DOT compliance records. Brakes, tires, reefer temperature unit, and lights are verified operational.',
+      detailedBody: 'Your electronic DVIR pre-trip inspection log for Tractor #TR-402 and 53ft Reefer Trailer has been successfully transmitted to DOT compliance records. Brakes, tires, reefer temperature unit, and lights are verified operational.',
       timestamp: DateTime.now().subtract(const Duration(hours: 6)),
       category: NotificationCategory.complianceSafety,
       priority: NotificationPriority.success,
@@ -98,7 +94,9 @@ class NotificationsMockDataSource {
   static void markAsRead(String id) {
     final index = _mockNotifications.indexWhere((n) => n.id == id);
     if (index != -1) {
-      _mockNotifications[index] = _mockNotifications[index].copyWith(isRead: true);
+      _mockNotifications[index] = _mockNotifications[index].copyWith(
+        isRead: true,
+      );
     }
   }
 

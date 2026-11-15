@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
 
@@ -6,7 +7,7 @@ class AuthController extends ChangeNotifier {
   final IAuthRepository _authRepository;
 
   AuthController({IAuthRepository? authRepository})
-      : _authRepository = authRepository ?? AuthRepository();
+    : _authRepository = authRepository ?? AuthRepository();
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -31,7 +32,10 @@ class AuthController extends ChangeNotifier {
     _setLoading(true);
     _setError(null);
     try {
-      _currentUser = await _authRepository.login(email: email, password: password);
+      _currentUser = await _authRepository.login(
+        email: email,
+        password: password,
+      );
       _setLoading(false);
       return true;
     } catch (e) {

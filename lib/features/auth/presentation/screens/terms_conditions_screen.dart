@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../../app/theme/app_colors.dart';
 
 class TermsConditionsScreen extends StatefulWidget {
@@ -6,7 +7,10 @@ class TermsConditionsScreen extends StatefulWidget {
 
   const TermsConditionsScreen({super.key, this.initialTabIndex = 0});
 
-  static Future<void> showModal(BuildContext context, {int initialTabIndex = 0}) {
+  static Future<void> showModal(
+    BuildContext context, {
+    int initialTabIndex = 0,
+  }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -31,7 +35,8 @@ class TermsConditionsScreen extends StatefulWidget {
   State<TermsConditionsScreen> createState() => _TermsConditionsScreenState();
 }
 
-class _TermsConditionsScreenState extends State<TermsConditionsScreen> with SingleTickerProviderStateMixin {
+class _TermsConditionsScreenState extends State<TermsConditionsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   static const Color primaryColor = AppColors.primary;
@@ -64,12 +69,20 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
         backgroundColor: AppColors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textMain, size: 18),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: textMain,
+            size: 18,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
           'Legal & Compliance',
-          style: TextStyle(color: textMain, fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: textMain,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
         bottom: PreferredSize(
@@ -88,8 +101,14 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
               ),
               labelColor: Colors.white,
               unselectedLabelColor: textSub,
-              labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              labelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
               indicatorSize: TabBarIndicatorSize.tab,
               tabs: const [
                 Tab(text: 'Terms of Use'),
@@ -123,9 +142,14 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
                 backgroundColor: primaryColor,
                 foregroundColor: Colors.white,
                 elevation: 0.5,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              child: const Text('I Understand & Agree', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+              child: const Text(
+                'I Understand & Agree',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ),
@@ -147,32 +171,27 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
         _buildSectionCard(
           number: '1',
           title: 'Acceptance of Terms',
-          body:
-              'By creating an account, logging into the Carrier Direct Driver Platform, or accepting any freight dispatch, you agree to be bound by these Terms of Service, all applicable state and federal laws (including FMCSA and DOT regulations), and our Safety Compliance standards.',
+          body: 'By creating an account, logging into the Carrier Direct Driver Platform, or accepting any freight dispatch, you agree to be bound by these Terms of Service, all applicable state and federal laws (including FMCSA and DOT regulations), and our Safety Compliance standards.',
         ),
         _buildSectionCard(
           number: '2',
           title: 'Driver Eligibility & Compliance',
-          body:
-              'All drivers must maintain an active Commercial Driver’s License (CDL), valid DOT Medical Examiner Certificate, and clean safety record. Providing false, expired, or fraudulent credentials will result in immediate suspension and notification to carrier dispatch.',
+          body: 'All drivers must maintain an active Commercial Driver’s License (CDL), valid DOT Medical Examiner Certificate, and clean safety record. Providing false, expired, or fraudulent credentials will result in immediate suspension and notification to carrier dispatch.',
         ),
         _buildSectionCard(
           number: '3',
           title: 'Cargo Care, BOL & Proof of Delivery (POD)',
-          body:
-              'Drivers are solely responsible for inspecting freight condition before departure. Upon delivery, drivers must capture a high-resolution photo of the signed Bill of Lading (BOL) and collect customer OTP/digital signature before closing the shipment.',
+          body: 'Drivers are solely responsible for inspecting freight condition before departure. Upon delivery, drivers must capture a high-resolution photo of the signed Bill of Lading (BOL) and collect customer OTP/digital signature before closing the shipment.',
         ),
         _buildSectionCard(
           number: '4',
           title: 'Load Dispatch & Route Compliance',
-          body:
-              'Assigned freight dispatch and delivery schedules are tracked based on verified GPS timestamps and completed POD uploads. Drivers must adhere to approved commercial vehicle navigation routes.',
+          body: 'Assigned freight dispatch and delivery schedules are tracked based on verified GPS timestamps and completed POD uploads. Drivers must adhere to approved commercial vehicle navigation routes.',
         ),
         _buildSectionCard(
           number: '5',
           title: 'Account Termination & Liability',
-          body:
-              'Carrier Direct reserves the right to restrict platform access for safety violations, cargo abandonment, reckless driving, or failure to upload mandatory compliance documents.',
+          body: 'Carrier Direct reserves the right to restrict platform access for safety violations, cargo abandonment, reckless driving, or failure to upload mandatory compliance documents.',
         ),
         const SizedBox(height: 16),
       ],
@@ -193,26 +212,22 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
         _buildSectionCard(
           number: '1',
           title: 'Location & Telematics Tracking',
-          body:
-              'We collect real-time background and foreground GPS location data exclusively during active dispatches and on-duty driving shifts to provide shippers with live freight ETA, route monitoring, and emergency roadside response.',
+          body: 'We collect real-time background and foreground GPS location data exclusively during active dispatches and on-duty driving shifts to provide shippers with live freight ETA, route monitoring, and emergency roadside response.',
         ),
         _buildSectionCard(
           number: '2',
           title: 'Document & Photo Storage',
-          body:
-              'Driver identification photos, CDL scans, medical cards, and POD document photos are encrypted using AES-256 and stored in compliance with federal freight record-keeping standards.',
+          body: 'Driver identification photos, CDL scans, medical cards, and POD document photos are encrypted using AES-256 and stored in compliance with federal freight record-keeping standards.',
         ),
         _buildSectionCard(
           number: '3',
           title: 'Information Sharing',
-          body:
-              'Your location and contact number are only shared with authorized dispatchers and the recipient customer during active shipment deliveries. We never sell driver personal information to third-party advertisers.',
+          body: 'Your location and contact number are only shared with authorized dispatchers and the recipient customer during active shipment deliveries. We never sell driver personal information to third-party advertisers.',
         ),
         _buildSectionCard(
           number: '4',
           title: 'Data Retention & Deletion',
-          body:
-              'DOT compliance records and shipment invoices are retained for the statutory period required by transportation authorities. You may request account deactivation and personal data deletion via Support.',
+          body: 'DOT compliance records and shipment invoices are retained for the statutory period required by transportation authorities. You may request account deactivation and personal data deletion via Support.',
         ),
         const SizedBox(height: 16),
       ],
@@ -233,32 +248,33 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
         _buildSectionCard(
           number: '1',
           title: 'Hours of Service (HOS) & Rest Breaks',
-          body:
-              'Strict adherence to electronic logging device (ELD) hours of service is mandatory. Operating a vehicle under fatigue or falsifying logs is grounds for immediate dispatch termination.',
+          body: 'Strict adherence to electronic logging device (ELD) hours of service is mandatory. Operating a vehicle under fatigue or falsifying logs is grounds for immediate dispatch termination.',
         ),
         _buildSectionCard(
           number: '2',
           title: 'Pre-Trip Vehicle Inspection (DVIR)',
-          body:
-              'Drivers must conduct a thorough pre-trip and post-trip vehicle inspection, ensuring brakes, tires, lights, and trailer seals are secure before rolling out.',
+          body: 'Drivers must conduct a thorough pre-trip and post-trip vehicle inspection, ensuring brakes, tires, lights, and trailer seals are secure before rolling out.',
         ),
         _buildSectionCard(
           number: '3',
           title: 'Professional Communication',
-          body:
-              'Maintain courteous and professional conduct at all shipper warehouses, receiver docks, and weigh stations. Report any detention delays promptly through in-app Dispatch Chat.',
+          body: 'Maintain courteous and professional conduct at all shipper warehouses, receiver docks, and weigh stations. Report any detention delays promptly through in-app Dispatch Chat.',
         ),
         const SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildHeaderCard({required String title, required String version, required IconData icon}) {
+  Widget _buildHeaderCard({
+    required String title,
+    required String version,
+    required IconData icon,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: cardBorder),
         boxShadow: [
           BoxShadow(
@@ -285,7 +301,11 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: textMain, fontSize: 14, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: textMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -300,13 +320,17 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
     );
   }
 
-  Widget _buildSectionCard({required String number, required String title, required String body}) {
+  Widget _buildSectionCard({
+    required String number,
+    required String title,
+    required String body,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: cardBorder),
         boxShadow: [
           BoxShadow(
@@ -331,7 +355,11 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
                 child: Center(
                   child: Text(
                     number,
-                    style: const TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: primaryColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -339,7 +367,11 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> with Sing
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(color: textMain, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: textMain,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

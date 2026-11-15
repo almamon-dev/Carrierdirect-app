@@ -9,7 +9,10 @@ class AppConstants {
   static const String keyRememberMe = 'remember_me';
   static const String keySavedEmail = 'saved_email';
   static const String keyOnboardingCompleted = 'onboarding_completed';
-  static const String keyLocationPermissionGranted = 'location_permission_granted';
+  static const String keyLocationPermissionGranted =
+      'location_permission_granted';
+  static const String keyPushNotificationsEnabled =
+      'push_notifications_enabled';
 
   // App Strings
   static const String companyName = 'CarrierDirect';

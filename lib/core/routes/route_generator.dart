@@ -8,14 +8,16 @@ import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 
 // Screen 1, 2, 3 Onboarding & Permissions (Matching User Mockup Image)
+import '../../features/onboarding/presentation/screens/admin_approval_screen.dart';
 import '../../features/onboarding/presentation/screens/location_success_screen.dart';
 import '../../features/permissions/location_permission_screen.dart';
 import '../../features/permissions/notification_permission_screen.dart';
 import '../../features/splash/splash_screen.dart';
 
-// Extra Tracking & Details Features
-import '../../features/gps_tracker/gps_tracker_screen.dart';
-import '../../features/order_details/order_details_screen.dart';
+// Real Trips & Navigation
+import '../../features/trips/presentation/screens/in_app_navigation_screen.dart';
+import '../../features/trips/presentation/screens/shipment_details_screen.dart';
+import '../../features/trips/presentation/screens/trips_screen.dart';
 import 'app_routes.dart';
 
 class RouteGenerator {
@@ -35,7 +37,9 @@ class RouteGenerator {
       case AppRoutes.locationIntro:
       case AppRoutes.onboarding:
       case AppRoutes.onboardingIntro:
-        return MaterialPageRoute(builder: (_) => const LocationPermissionScreen());
+        return MaterialPageRoute(
+          builder: (_) => const LocationPermissionScreen(),
+        );
 
       // 3. Location Success Screen (Screen 6: "Location Enabled" Success State)
       case AppRoutes.locationSuccess:
@@ -43,7 +47,9 @@ class RouteGenerator {
 
       // 4. Notification Permission Screen (Screen 3: "Stay Updated" from mockup)
       case AppRoutes.notificationPermission:
-        return MaterialPageRoute(builder: (_) => const NotificationPermissionScreen());
+        return MaterialPageRoute(
+          builder: (_) => const NotificationPermissionScreen(),
+        );
 
       // 4. Credential Login Screen (User's authentic LoginScreen)
       case AppRoutes.login:
@@ -53,10 +59,14 @@ class RouteGenerator {
       case AppRoutes.forgotPassword:
         return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
 
-      // 6. Complete Profile Step & Dashboard (Opens 3-Step Verification Modal)
+      // 6. Complete Profile Step & Dashboard
       case AppRoutes.dashboard:
       case AppRoutes.profileSetup:
         return MaterialPageRoute(builder: (_) => const DashboardScreen());
+
+      // 6.1 Admin Approval Screen (Locked until admin verifies driver)
+      case AppRoutes.adminApproval:
+        return MaterialPageRoute(builder: (_) => const AdminApprovalScreen());
 
       // 7. Profile & Edit Profile Screens
       case AppRoutes.profile:
@@ -65,28 +75,28 @@ class RouteGenerator {
       case AppRoutes.editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfileScreen());
 
-      // 8. GPS Tracker (Active Job)
+      // 8. GPS Navigation / Tracking
       case AppRoutes.gpsTracker:
-        return MaterialPageRoute(
-          builder: (_) => GpsTrackerScreen(
-            initialLoad: args is Map<String, dynamic> ? args : null,
-          ),
-        );
+        if (args is ShipmentItem) {
+          return MaterialPageRoute(
+            builder: (_) => InAppNavigationScreen(shipment: args),
+          );
+        }
+        return MaterialPageRoute(builder: (_) => const TripsScreen());
 
-      // 9. Order Tracking (Details)
+      // 9. Shipment Details
       case AppRoutes.orderDetails:
-        return MaterialPageRoute(
-          builder: (_) => OrderDetailsScreen(
-            order: args is Map<String, dynamic> ? args : null,
-          ),
-        );
+        if (args is ShipmentItem) {
+          return MaterialPageRoute(
+            builder: (_) => ShipmentDetailsScreen(shipment: args),
+          );
+        }
+        return MaterialPageRoute(builder: (_) => const TripsScreen());
 
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(
-            body: Center(
-              child: Text('No route defined for ${settings.name}'),
-            ),
+            body: Center(child: Text('No route defined for ${settings.name}')),
           ),
         );
     }

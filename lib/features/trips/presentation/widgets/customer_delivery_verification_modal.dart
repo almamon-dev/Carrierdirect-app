@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../shared/utils/app_toast.dart';
 import '../screens/trips_screen.dart';
 
@@ -35,10 +37,12 @@ class CustomerDeliveryVerificationModal extends StatefulWidget {
   }
 
   @override
-  State<CustomerDeliveryVerificationModal> createState() => _CustomerDeliveryVerificationModalState();
+  State<CustomerDeliveryVerificationModal> createState() =>
+      _CustomerDeliveryVerificationModalState();
 }
 
-class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVerificationModal> {
+class _CustomerDeliveryVerificationModalState
+    extends State<CustomerDeliveryVerificationModal> {
   final List<Offset?> _points = [];
   final TextEditingController _otpController = TextEditingController();
   final FocusNode _otpFocusNode = FocusNode();
@@ -65,17 +69,6 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
     _otpController.addListener(() {
       if (mounted) setState(() {});
     });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final email = '${widget.shipment.destTitle.toLowerCase().replaceAll(' ', '')}@gmail.com';
-        AppToast.info(
-          context,
-          '📨 6-digit OTP sent to customer email ($email)',
-          icon: Icons.mark_email_read_rounded,
-        );
-      }
-    });
   }
 
   void _startResendTimer() {
@@ -99,10 +92,9 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
 
   void _resendOtp() {
     _startResendTimer();
-    final email = '${widget.shipment.destTitle.toLowerCase().replaceAll(' ', '')}@gmail.com';
     AppToast.success(
       context,
-      '📨 Fresh 6-digit code sent to $email',
+      '📨 Fresh 6-digit verification code sent to customer',
       icon: Icons.send_rounded,
     );
   }
@@ -117,8 +109,6 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
 
   @override
   Widget build(BuildContext context) {
-    final emailAddress = '${widget.shipment.destTitle.toLowerCase().replaceAll(' ', '')}@gmail.com';
-
     return Container(
       decoration: const BoxDecoration(
         color: lightBg,
@@ -168,10 +158,7 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                         gradient: const LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFFF6E40),
-                            Color(0xFFE64A19),
-                          ],
+                          colors: [Color(0xFFFF6E40), Color(0xFFE64A19)],
                         ),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
@@ -217,7 +204,10 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                     ),
                     // Pending Verification Amber Badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFFBEB),
                         borderRadius: BorderRadius.circular(20),
@@ -226,7 +216,11 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.schedule_rounded, color: Color(0xFFD97706), size: 13),
+                          Icon(
+                            Icons.schedule_rounded,
+                            color: Color(0xFFD97706),
+                            size: 13,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'Pending',
@@ -245,7 +239,10 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
 
                 // 3. Code Sent to Customer Card
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: cardBg,
                     borderRadius: BorderRadius.circular(14),
@@ -262,15 +259,19 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                           border: Border.all(color: cardBorder),
                         ),
                         child: const Center(
-                          child: Icon(Icons.mail_outline_rounded, color: primaryOrange, size: 20),
+                          child: Icon(
+                            Icons.mail_outline_rounded,
+                            color: primaryOrange,
+                            size: 20,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Code sent to customer',
                               style: TextStyle(
                                 color: textMain,
@@ -278,10 +279,10 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: 2),
                             Text(
-                              emailAddress,
-                              style: const TextStyle(
+                              'Verification code for consignee sign-off',
+                              style: TextStyle(
                                 color: textMuted,
                                 fontSize: 11.5,
                               ),
@@ -319,16 +320,25 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                         GestureDetector(
                           onTap: _resendOtp,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: primaryOrange.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: primaryOrange.withValues(alpha: 0.4)),
+                              border: Border.all(
+                                color: primaryOrange.withValues(alpha: 0.4),
+                              ),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.refresh_rounded, size: 13, color: primaryOrange),
+                                Icon(
+                                  Icons.refresh_rounded,
+                                  size: 13,
+                                  color: primaryOrange,
+                                ),
                                 SizedBox(width: 3),
                                 Text(
                                   'Resend',
@@ -367,11 +377,14 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                         children: List.generate(6, (index) {
                           final text = _otpController.text;
                           final char = index < text.length ? text[index] : '';
-                          final isFocused = _otpFocusNode.hasFocus && index == text.length;
+                          final isFocused =
+                              _otpFocusNode.hasFocus && index == text.length;
 
                           return Expanded(
                             child: Container(
-                              margin: EdgeInsets.only(right: index == 5 ? 0 : 7),
+                              margin: EdgeInsets.only(
+                                right: index == 5 ? 0 : 7,
+                              ),
                               height: 52,
                               decoration: BoxDecoration(
                                 color: Colors.white,
@@ -380,8 +393,8 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                                   color: isFocused
                                       ? primaryOrange
                                       : char.isNotEmpty
-                                          ? primaryOrange.withValues(alpha: 0.7)
-                                          : cardBorder,
+                                      ? primaryOrange.withValues(alpha: 0.7)
+                                      : cardBorder,
                                   width: isFocused || char.isNotEmpty ? 1.5 : 1,
                                 ),
                               ),
@@ -396,19 +409,19 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                                         ),
                                       )
                                     : isFocused
-                                        ? Container(
-                                            width: 2,
-                                            height: 22,
-                                            color: primaryOrange,
-                                          )
-                                        : const Text(
-                                            '—',
-                                            style: TextStyle(
-                                              color: textDarkMuted,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
+                                    ? Container(
+                                        width: 2,
+                                        height: 22,
+                                        color: primaryOrange,
+                                      )
+                                    : const Text(
+                                        '—',
+                                        style: TextStyle(
+                                          color: textDarkMuted,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                               ),
                             ),
                           );
@@ -441,10 +454,7 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                 const SizedBox(height: 6),
                 const Text(
                   'Please enter the 6-digit code sent to the customer',
-                  style: TextStyle(
-                    color: textMuted,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: textMuted, fontSize: 11),
                 ),
                 const SizedBox(height: 16),
 
@@ -467,7 +477,9 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: _hasSignature ? const Color(0xFF22C55E) : cardBorder,
+                      color: _hasSignature
+                          ? const Color(0xFF22C55E)
+                          : cardBorder,
                       width: _hasSignature ? 1.4 : 1,
                     ),
                   ),
@@ -479,7 +491,11 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.edit_outlined, color: textMuted, size: 24),
+                              Icon(
+                                Icons.edit_outlined,
+                                color: textMuted,
+                                size: 24,
+                              ),
                               SizedBox(height: 6),
                               Text(
                                 'Sign above',
@@ -504,7 +520,9 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                             (index) => Expanded(
                               child: Container(
                                 height: 1,
-                                color: index % 2 == 0 ? const Color(0xFFCBD5E1) : Colors.transparent,
+                                color: index % 2 == 0
+                                    ? const Color(0xFFCBD5E1)
+                                    : Colors.transparent,
                               ),
                             ),
                           ),
@@ -553,14 +571,19 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                             });
                           },
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   'Clear',
                                   style: TextStyle(
-                                    color: _points.isNotEmpty ? primaryOrange : textDarkMuted,
+                                    color: _points.isNotEmpty
+                                        ? primaryOrange
+                                        : textDarkMuted,
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -568,7 +591,9 @@ class _CustomerDeliveryVerificationModalState extends State<CustomerDeliveryVeri
                                 const SizedBox(width: 4),
                                 Icon(
                                   Icons.refresh_rounded,
-                                  color: _points.isNotEmpty ? primaryOrange : textDarkMuted,
+                                  color: _points.isNotEmpty
+                                      ? primaryOrange
+                                      : textDarkMuted,
                                   size: 15,
                                 ),
                               ],

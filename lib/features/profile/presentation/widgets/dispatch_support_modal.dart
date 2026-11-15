@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../shared/utils/app_toast.dart';
 import '../../../chat/presentation/screens/chat_screen.dart';
 import '../../../trips/presentation/screens/trips_screen.dart';
@@ -60,7 +61,11 @@ class DispatchSupportModal extends StatelessWidget {
               // Header
               const Row(
                 children: [
-                  Icon(Icons.headset_mic_rounded, color: primaryOrange, size: 22),
+                  Icon(
+                    Icons.headset_mic_rounded,
+                    color: primaryOrange,
+                    size: 22,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Driver Support & Help Desk',
@@ -120,9 +125,14 @@ class DispatchSupportModal extends StatelessWidget {
                 title: 'Support Email',
                 subtitle: 'support@carrierdirect.com (Tap to copy)',
                 onTap: () {
-                  Clipboard.setData(const ClipboardData(text: 'support@carrierdirect.com'));
+                  Clipboard.setData(
+                    const ClipboardData(text: 'support@carrierdirect.com'),
+                  );
                   Navigator.pop(context);
-                  AppToast.success(context, 'Copied support@carrierdirect.com to clipboard');
+                  AppToast.success(
+                    context,
+                    'Copied support@carrierdirect.com to clipboard',
+                  );
                 },
               ),
               const SizedBox(height: 10),
@@ -193,9 +203,7 @@ class DispatchSupportModal extends StatelessWidget {
                 color: iconBg,
                 borderRadius: BorderRadius.circular(6.0),
               ),
-              child: Center(
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
+              child: Center(child: Icon(icon, color: iconColor, size: 20)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -215,10 +223,14 @@ class DispatchSupportModal extends StatelessWidget {
                       if (badgeText != null) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: (badgeColor ?? const Color(0xFF059669)).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
+                            color: (badgeColor ?? const Color(0xFF059669))
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             badgeText,
@@ -281,7 +293,11 @@ class DispatchSupportModal extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Row(
                   children: [
-                    Icon(Icons.help_outline_rounded, color: Color(0xFFD97706), size: 20),
+                    Icon(
+                      Icons.help_outline_rounded,
+                      color: Color(0xFFD97706),
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'Driver FAQs',
@@ -316,7 +332,9 @@ class DispatchSupportModal extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryOrange,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6.0),
+                      ),
                     ),
                     child: const Text('Got It'),
                   ),
@@ -359,7 +377,11 @@ class DispatchSupportModal extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: Color(0xFF059669), size: 20),
+                    Icon(
+                      Icons.shield_outlined,
+                      color: Color(0xFF059669),
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'Safety & Compliance Guide',
@@ -394,7 +416,9 @@ class DispatchSupportModal extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryOrange,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6.0),
+                      ),
                     ),
                     child: const Text('Understood'),
                   ),
@@ -412,7 +436,7 @@ class DispatchSupportModal extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: slate50,
-        borderRadius: BorderRadius.circular(6.0),
+        borderRadius: BorderRadius.circular(4.0),
         border: Border.all(color: slate200),
       ),
       child: Column(

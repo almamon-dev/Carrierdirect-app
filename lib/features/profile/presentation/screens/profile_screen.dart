@@ -1,4 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/local_storage.dart';
+import '../../../../core/storage/secure_storage.dart';
+import '../../../../services/notification_service.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/utils/file_upload_helper.dart';
 import '../../../../shared/utils/logout_helper.dart';
@@ -15,23 +24,255 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedTabIndex = 0; // 0: Personal Info, 1: Documents
+
+  // Loading state & Shimmer animation
+  bool _isLoading = true;
+  late final AnimationController _shimmerController;
+  late final Animation<double> _shimmerAnimation;
 
   // Driver Status state
   bool _isOnline = true;
   String _driverStatus = 'Online';
 
-  // Preferences state
+  // Notification state
   bool _pushNotifications = true;
-  bool _locationSharing = true;
+  bool _isUpdatingPush = false;
 
   // Driver info
-  final String _driverName = 'Michael Smith';
-  final String _driverRole = 'Driver';
-  final String _phoneNumber = '+1 234 567 8900';
-  final String _emailAddress = 'michael.smith@gmail.com';
-  final String _physicalAddress = 'Dublin, Ireland';
+  String _driverName = 'Driver';
+  String _driverRole = 'Commercial Driver';
+  String _phoneNumber = '';
+  String _emailAddress = '';
+  String _physicalAddress = '';
+  String? _profilePictureUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOutSine),
+    );
+    _loadProfileData();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _getAuthToken() async {
+    final token = await SecureStorage().read(AppConstants.keyAuthToken);
+    if (token != null && token.isNotEmpty) return token;
+    final localToken = await LocalStorage().getString(
+      AppConstants.keyAuthToken,
+    );
+    if (localToken != null && localToken.isNotEmpty) return localToken;
+    return null;
+  }
+
+  Future<void> _loadProfileData() async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.driverProfile}',
+      );
+      final res = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final data = body['data'] as Map<String, dynamic>? ?? {};
+
+        final name =
+            data['name']?.toString() ?? data['full_name']?.toString() ?? '';
+        final email = data['email']?.toString() ?? '';
+        final phone =
+            (data['phone'] ??
+                    data['phone_number'] ??
+                    data['mobile'] ??
+                    data['user']?['phone'] ??
+                    data['user']?['phone_number'] ??
+                    (data['personal'] as Map<String, dynamic>?)?['phone'] ??
+                    (data['personal']
+                        as Map<String, dynamic>?)?['phone_number'] ??
+                    (data['driver_details']
+                        as Map<String, dynamic>?)?['phone'] ??
+                    (data['driver_details']
+                        as Map<String, dynamic>?)?['phone_number'])
+                ?.toString() ??
+            '';
+        final profilePic = data['profile_picture']?.toString();
+        final role = data['role_name']?.toString() ?? 'Commercial Driver';
+
+        final details = data['driver_details'] as Map<String, dynamic>? ?? {};
+        final creds = data['credentials'] as Map<String, dynamic>? ?? {};
+        final personal = data['personal'] as Map<String, dynamic>? ?? {};
+        final verification =
+            data['verification'] as Map<String, dynamic>? ?? {};
+
+        final loc =
+            details['current_location']?.toString() ??
+            personal['current_location']?.toString() ??
+            personal['address']?.toString() ??
+            '';
+
+        final status = verification['status']?.toString() ?? 'pending_setup';
+        final osPushGranted = await NotificationService().checkPermission();
+        final serverPush = data['push_notifications_enabled'] != false;
+
+        if (mounted) {
+          setState(() {
+            if (name.isNotEmpty) _driverName = name;
+            if (email.isNotEmpty) _emailAddress = email;
+            if (phone.isNotEmpty) _phoneNumber = _cleanPhoneNumber(phone);
+            if (loc.isNotEmpty) _physicalAddress = loc;
+            if (role.isNotEmpty) _driverRole = role;
+            _pushNotifications = serverPush && osPushGranted;
+            if (profilePic != null && profilePic.isNotEmpty) {
+              _profilePictureUrl = profilePic;
+            }
+
+            final licenseDoc =
+                details['license_document'] ?? creds['license_document'];
+            final medDoc =
+                details['medical_card_document'] ??
+                creds['medical_card_document'];
+            final insDoc =
+                details['insurance_document'] ?? creds['insurance_document'];
+
+            if (_documentsList.isNotEmpty) {
+              final isLicenseVerified = (status == 'verified');
+              final isLicenseUploaded =
+                  (licenseDoc != null && licenseDoc.toString().isNotEmpty);
+              _documentsList[0]['isVerified'] = isLicenseVerified;
+              _documentsList[0]['status'] = isLicenseVerified
+                  ? 'Verified'
+                  : (isLicenseUploaded ? 'Under Review' : 'Pending');
+            }
+            if (_documentsList.length > 1) {
+              final isMedVerified = (status == 'verified' && medDoc != null);
+              final isMedUploaded =
+                  (medDoc != null && medDoc.toString().isNotEmpty);
+              _documentsList[1]['isVerified'] = isMedVerified;
+              _documentsList[1]['status'] = isMedVerified
+                  ? 'Verified'
+                  : (isMedUploaded ? 'Under Review' : 'Pending');
+            }
+            if (_documentsList.length > 2) {
+              final isInsVerified = (status == 'verified' && insDoc != null);
+              final isInsUploaded =
+                  (insDoc != null && insDoc.toString().isNotEmpty);
+              _documentsList[2]['isVerified'] = isInsVerified;
+              _documentsList[2]['status'] = isInsVerified
+                  ? 'Verified'
+                  : (isInsUploaded ? 'Under Review' : 'Pending');
+            }
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading profile in ProfileScreen: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Clean country code from phone number so it displays purely as a local phone number (e.g. 017xxxxxxxx or 555xxxxxxx)
+  String _cleanPhoneNumber(String rawPhone) {
+    if (rawPhone.isEmpty) return '';
+
+    // Remove spaces, hyphens, parentheses, dots
+    String digits = rawPhone.replaceAll(RegExp(r'[\s\-\(\)\.]'), '');
+
+    // Clean multiple leading '+' if any
+    while (digits.startsWith('+')) {
+      digits = digits.substring(1);
+    }
+
+    // Handle repeated country codes (e.g. 880880... or 880+880...)
+    while (digits.startsWith('880880')) {
+      digits = digits.substring(3);
+    }
+    while (digits.startsWith('11') && digits.length > 11) {
+      digits = digits.substring(1);
+    }
+
+    // 1. Bangladesh: starts with 880
+    if (digits.startsWith('880')) {
+      digits = digits.substring(3);
+      // In BD, local number starts with 0 (e.g. 017xxxxxxxx)
+      if (!digits.startsWith('0')) {
+        digits = '0$digits';
+      }
+      return digits;
+    }
+
+    // 2. US/Canada: 11 digits starting with 1 (e.g. +1 555 234 8901 -> 5552348901)
+    if (digits.length == 11 && digits.startsWith('1')) {
+      return digits.substring(1);
+    }
+
+    // 3. India: starts with 91 and length == 12
+    if (digits.startsWith('91') && digits.length == 12) {
+      return digits.substring(2);
+    }
+
+    // 4. UK: starts with 44 and length >= 12
+    if (digits.startsWith('44') && digits.length >= 12) {
+      digits = digits.substring(2);
+      if (!digits.startsWith('0')) digits = '0$digits';
+      return digits;
+    }
+
+    // 5. UAE: starts with 971
+    if (digits.startsWith('971')) {
+      digits = digits.substring(3);
+      if (!digits.startsWith('0')) digits = '0$digits';
+      return digits;
+    }
+
+    // 6. Saudi: starts with 966
+    if (digits.startsWith('966')) {
+      digits = digits.substring(3);
+      if (!digits.startsWith('0')) digits = '0$digits';
+      return digits;
+    }
+
+    // If local BD number missing leading 0 (10 digits starting with 1):
+    if (digits.length == 10 &&
+        digits.startsWith('1') &&
+        !digits.startsWith('10')) {
+      if (rawPhone.contains('880') || rawPhone.startsWith('+88')) {
+        return '0$digits';
+      }
+      return digits;
+    }
+
+    return digits;
+  }
 
   // Stats
   final String _totalTrips = '248';
@@ -137,7 +378,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         borderRadius: BorderRadius.circular(6.0),
                         border: Border.all(color: const Color(0xFFBFDBFE)),
                       ),
-                      child: const Icon(Icons.credit_card_outlined, color: Color(0xFF2563EB), size: 20),
+                      child: const Icon(
+                        Icons.credit_card_outlined,
+                        color: Color(0xFF2563EB),
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -146,15 +391,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           Text(
                             '$title ($side Side)',
-                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: slate900),
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              color: slate900,
+                            ),
                           ),
                           const SizedBox(height: 2),
-                          const Text('Verified & active on record', style: TextStyle(fontSize: 11.5, color: successGreen)),
+                          const Text(
+                            'Verified & active on record',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: successGreen,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20, color: slate500),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: slate500,
+                      ),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
@@ -171,14 +430,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.badge_outlined, size: 52, color: Color(0xFF2563EB)),
+                      const Icon(
+                        Icons.badge_outlined,
+                        size: 52,
+                        color: Color(0xFF2563EB),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         'CDL Document ($side Side Preview)',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: slate700),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: slate700,
+                        ),
                       ),
                       const SizedBox(height: 4),
-                      const Text('Resolution: High Definition • Verified Clear', style: TextStyle(fontSize: 11, color: slate500)),
+                      const Text(
+                        'Resolution: High Definition • Verified Clear',
+                        style: TextStyle(fontSize: 11, color: slate500),
+                      ),
                     ],
                   ),
                 ),
@@ -190,7 +460,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryOrange,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6.0),
+                      ),
                     ),
                     child: const Text('Close'),
                   ),
@@ -240,7 +512,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: orangeLightBg,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(doc['icon'] as IconData, color: primaryOrange, size: 22),
+                      child: Icon(
+                        doc['icon'] as IconData,
+                        color: primaryOrange,
+                        size: 22,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -257,17 +533,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            doc['isVerified'] == true ? 'Document Verified' : 'Pending Upload',
+                            doc['isVerified'] == true
+                                ? 'Document Verified'
+                                : 'Pending Upload',
                             style: TextStyle(
                               fontSize: 12,
-                              color: doc['isVerified'] == true ? successGreen : slate500,
+                              color: doc['isVerified'] == true
+                                  ? successGreen
+                                  : slate500,
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: successGreenLight,
                         borderRadius: BorderRadius.circular(4.0),
@@ -301,11 +584,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: Column(
                     children: [
-                      _buildModalInfoRow('Document Status', 'Active & Verified (Compliant)'),
+                      _buildModalInfoRow(
+                        'Document Status',
+                        'Active & Verified (Compliant)',
+                      ),
                       const Divider(height: 16, color: slate200),
-                      _buildModalInfoRow('Expiration / Validity', doc['expiry'] as String),
+                      _buildModalInfoRow(
+                        'Expiration / Validity',
+                        doc['expiry'] as String,
+                      ),
                       const Divider(height: 16, color: slate200),
-                      _buildModalInfoRow('Verification Authority', 'CarrierDirect Fleet Compliance'),
+                      _buildModalInfoRow(
+                        'Verification Authority',
+                        'CarrierDirect Fleet Compliance',
+                      ),
                     ],
                   ),
                 ),
@@ -320,6 +612,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             context,
                             onVerificationComplete: () {
                               AppToast.success(context, 'Compliance updated!');
+                              _loadProfileData();
                             },
                           );
                         },
@@ -329,7 +622,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           foregroundColor: primaryOrange,
                           side: const BorderSide(color: primaryOrange),
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
@@ -342,7 +637,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                         child: const Text('Close'),
                       ),
@@ -364,7 +661,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Text(label, style: const TextStyle(fontSize: 12.5, color: slate500)),
         Text(
           value,
-          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: slate900),
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: slate900,
+          ),
         ),
       ],
     );
@@ -380,7 +681,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(
+              vertical: 16.0,
+              horizontal: 20.0,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,7 +711,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 14),
                 _buildStatusOption(
                   title: 'Online',
-                  subtitle: 'Available to receive new dispatch loads and orders',
+                  subtitle:
+                      'Available to receive new dispatch loads and orders',
                   color: const Color(0xFF10B981),
                   isSelected: _isOnline && _driverStatus == 'Online',
                   onTap: () {
@@ -467,7 +772,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
+          color: isSelected
+              ? color.withValues(alpha: 0.08)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? color.withValues(alpha: 0.4) : slate200,
@@ -495,11 +802,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 11.5, color: slate500)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 11.5, color: slate500),
+                  ),
                 ],
               ),
             ),
-            if (isSelected) Icon(Icons.check_circle_rounded, color: color, size: 20),
+            if (isSelected)
+              Icon(Icons.check_circle_rounded, color: color, size: 20),
           ],
         ),
       ),
@@ -516,62 +827,604 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // 1. Top App Bar
             _buildTopAppBar(),
 
-            // 2. Scrollable Body
+            // 2. Scrollable Body (Skeleton Loader while fetching API)
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Driver Profile Header Card
-                    _buildProfileHeaderCard(),
-                    const SizedBox(height: 12),
+              child: _isLoading
+                  ? _buildSkeletonBody()
+                  : RefreshIndicator(
+                      color: primaryOrange,
+                      onRefresh: _loadProfileData,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Driver Profile Header Card
+                            _buildProfileHeaderCard(),
+                            const SizedBox(height: 12),
 
-                    // 4-Column Stat Bar
-                    _buildStatBar(),
-                    const SizedBox(height: 16),
+                            // 4-Column Stat Bar
+                            _buildStatBar(),
+                            const SizedBox(height: 16),
 
-                    // Tab Segmented Selector (Personal Info & Documents)
-                    _buildSegmentedTabBar(),
-                    const SizedBox(height: 16),
+                            // Tab Segmented Selector (Personal Info & Documents)
+                            _buildSegmentedTabBar(),
+                            const SizedBox(height: 16),
 
-                    // Content View based on Tab
-                    if (_selectedTabIndex == 0) ...[
-                      // Card 1: Personal Information
-                      _buildPersonalInfoCard(),
-                      const SizedBox(height: 14),
+                            // Content View based on Tab
+                            if (_selectedTabIndex == 0) ...[
+                              // Card 1: Personal Information
+                              _buildPersonalInfoCard(),
+                              const SizedBox(height: 14),
 
-                      // Card 2: Driver Status
-                      _buildDriverStatusCard(),
-                      const SizedBox(height: 14),
+                              // Card 2: Driver Status
+                              _buildDriverStatusCard(),
+                              const SizedBox(height: 14),
 
-                      // Card 3: Documents & Verification
-                      _buildDocumentsCard(),
-                      const SizedBox(height: 14),
+                              // Card 3: Documents & Verification
+                              _buildDocumentsCard(),
+                              const SizedBox(height: 14),
 
-                      // Card 4: Account & Preferences
-                      _buildAccountPreferencesCard(),
-                      const SizedBox(height: 14),
+                              // Card 4: Account & Preferences
+                              _buildAccountPreferencesCard(),
+                              const SizedBox(height: 14),
 
-                      // Card 5: Support Section (from mockup)
-                      _buildSupportCard(),
-                      const SizedBox(height: 18),
-                    ] else ...[
-                      // Dedicated Documents Tab View
-                      _buildFullDocumentsView(),
-                      const SizedBox(height: 18),
-                    ],
+                              // Card 5: Support Section (from mockup)
+                              _buildSupportCard(),
+                              const SizedBox(height: 18),
+                            ] else ...[
+                              // Dedicated Documents Tab View
+                              _buildFullDocumentsView(),
+                              const SizedBox(height: 18),
+                            ],
 
-                    // Log Out Action Button
-                    _buildLogoutButton(),
-                    const SizedBox(height: 28),
-                  ],
-                ),
-              ),
+                            // Log Out Action Button
+                            _buildLogoutButton(),
+                            const SizedBox(height: 28),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // =========================================================================
+  // SKELETON SHIMMER LOADER HELPERS
+  // =========================================================================
+  Widget _buildShimmerBox({
+    required double width,
+    required double height,
+    BorderRadius? borderRadius,
+  }) {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, child) {
+        final val = _shimmerAnimation.value;
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: borderRadius ?? BorderRadius.circular(5.0),
+            gradient: LinearGradient(
+              begin: Alignment(val - 1.0, 0),
+              end: Alignment(val + 1.0, 0),
+              colors: const [
+                Color(0xFFE2E8F0),
+                Color(0xFFF8FAFC),
+                Color(0xFFE2E8F0),
+              ],
+              stops: const [0.1, 0.5, 0.9],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSkeletonBody() {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Driver Profile Header Card Skeleton (1:1 with _buildProfileHeaderCard)
+          Container(
+            padding: const EdgeInsets.all(14.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: slate200, width: 1.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Avatar Circle with Camera Badge
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _buildShimmerBox(
+                      width: 66,
+                      height: 66,
+                      borderRadius: BorderRadius.circular(33),
+                    ),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: _buildShimmerBox(
+                        width: 24,
+                        height: 24,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+
+                // Name, Role & Status Dropdown
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildShimmerBox(width: 135, height: 17),
+                      const SizedBox(height: 5),
+                      _buildShimmerBox(width: 105, height: 13),
+                      const SizedBox(height: 7),
+                      _buildShimmerBox(
+                        width: 78,
+                        height: 22,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Edit Profile Button
+                _buildShimmerBox(
+                  width: 86,
+                  height: 30,
+                  borderRadius: BorderRadius.circular(5.0),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 2. 4-Column Stat Bar Skeleton (1:1 with _buildStatBar)
+          Container(
+            padding: const EdgeInsets.symmetric(
+              vertical: 12.0,
+              horizontal: 8.0,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: slate200, width: 1.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                for (int i = 0; i < 4; i++) ...[
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildShimmerBox(
+                              width: 24,
+                              height: 24,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            const SizedBox(width: 5),
+                            _buildShimmerBox(width: 32, height: 15),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        _buildShimmerBox(width: 44, height: 10),
+                      ],
+                    ),
+                  ),
+                  if (i < 3)
+                    Container(
+                      width: 1,
+                      height: 28,
+                      color: slate100,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 3. Tab Segmented Selector Skeleton (1:1 with _buildSegmentedTabBar)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildShimmerBox(
+                        width: 18,
+                        height: 18,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const SizedBox(width: 7),
+                      _buildShimmerBox(
+                        width: 78,
+                        height: 14,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildShimmerBox(
+                        width: 18,
+                        height: 18,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const SizedBox(width: 7),
+                      _buildShimmerBox(
+                        width: 70,
+                        height: 14,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4. Card 1: Personal Information Skeleton (1:1 with _buildPersonalInfoCard)
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: slate200, width: 1.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildShimmerBox(width: 18, height: 18),
+                        const SizedBox(width: 8),
+                        _buildShimmerBox(width: 140, height: 16),
+                      ],
+                    ),
+                    _buildShimmerBox(
+                      width: 48,
+                      height: 24,
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                for (final item in [
+                  (60.0, 130.0),
+                  (50.0, 110.0),
+                  (40.0, 160.0),
+                  (55.0, 190.0),
+                ]) ...[
+                  Row(
+                    children: [
+                      _buildShimmerBox(width: 16, height: 16),
+                      const SizedBox(width: 8),
+                      _buildShimmerBox(width: item.$1, height: 13),
+                      const SizedBox(width: 12),
+                      _buildShimmerBox(width: item.$2, height: 13),
+                    ],
+                  ),
+                  const SizedBox(height: 13),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 5. Card 2: Driver Status Skeleton (1:1 with _buildDriverStatusCard)
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: slate200, width: 1.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildShimmerBox(width: 18, height: 18),
+                        const SizedBox(width: 8),
+                        _buildShimmerBox(width: 95, height: 16),
+                      ],
+                    ),
+                    _buildShimmerBox(
+                      width: 80,
+                      height: 24,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: slate50,
+                    borderRadius: BorderRadius.circular(5.0),
+                    border: Border.all(color: slate200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildShimmerBox(
+                        width: 8,
+                        height: 8,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildShimmerBox(width: 220, height: 13),
+                            const SizedBox(height: 4),
+                            _buildShimmerBox(width: 160, height: 11),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 6. Card 3: Documents & Verification Skeleton (1:1 with _buildDocumentsCard)
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: slate200, width: 1.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildShimmerBox(width: 18, height: 18),
+                        const SizedBox(width: 8),
+                        _buildShimmerBox(width: 165, height: 16),
+                      ],
+                    ),
+                    _buildShimmerBox(width: 55, height: 14),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                for (final docWidth in [150.0, 175.0, 140.0]) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Row(
+                      children: [
+                        _buildShimmerBox(
+                          width: 28,
+                          height: 28,
+                          borderRadius: BorderRadius.circular(5.0),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildShimmerBox(width: docWidth, height: 13),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildShimmerBox(
+                          width: 60,
+                          height: 20,
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
+                        const SizedBox(width: 6),
+                        _buildShimmerBox(width: 14, height: 14),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 7. Card 4: Account & Preferences Skeleton (1:1 with _buildAccountPreferencesCard)
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: slate200, width: 1.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildShimmerBox(width: 18, height: 18),
+                        const SizedBox(width: 8),
+                        _buildShimmerBox(width: 155, height: 16),
+                      ],
+                    ),
+                    _buildShimmerBox(width: 18, height: 18),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                for (final prefWidth in [120.0, 110.0]) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          _buildShimmerBox(width: 18, height: 18),
+                          const SizedBox(width: 12),
+                          _buildShimmerBox(width: prefWidth, height: 13.5),
+                        ],
+                      ),
+                      _buildShimmerBox(
+                        width: 40,
+                        height: 22,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 8. Card 5: 24/7 Support Section Skeleton (1:1 with _buildSupportCard)
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14.0,
+              vertical: 12.0,
+            ),
+            decoration: BoxDecoration(
+              color: orangeLightBg,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: orangeLightBorder, width: 1.0),
+            ),
+            child: Row(
+              children: [
+                _buildShimmerBox(
+                  width: 36,
+                  height: 36,
+                  borderRadius: BorderRadius.circular(5.0),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildShimmerBox(width: 130, height: 14),
+                      const SizedBox(height: 4),
+                      _buildShimmerBox(width: 190, height: 11),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildShimmerBox(
+                  width: 76,
+                  height: 28,
+                  borderRadius: BorderRadius.circular(5.0),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 9. Log Out Action Button Skeleton (1:1 with _buildLogoutButton)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 14.0,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5.0),
+              border: Border.all(color: const Color(0xFFFEE2E2), width: 1.0),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildShimmerBox(width: 18, height: 18),
+                const SizedBox(width: 8),
+                _buildShimmerBox(width: 60, height: 14),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+        ],
       ),
     );
   }
@@ -619,7 +1472,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   );
                 },
-                icon: const Icon(Icons.settings_outlined, size: 22, color: slate900),
+                icon: const Icon(
+                  Icons.settings_outlined,
+                  size: 22,
+                  color: slate900,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Settings',
@@ -627,7 +1484,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 12),
               IconButton(
                 onPressed: () => LogoutHelper.showLogoutDialog(context),
-                icon: const Icon(Icons.logout_rounded, size: 21, color: Color(0xFFDC2626)),
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  size: 21,
+                  color: Color(0xFFDC2626),
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Log Out',
@@ -666,11 +1527,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.logout_rounded,
-                  color: Color(0xFFDC2626),
-                  size: 20,
-                ),
+                Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
                 SizedBox(width: 8),
                 Text(
                   'Log Out',
@@ -722,15 +1579,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: slate100,
                 ),
                 child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/driver_avatar.png',
-                    width: 66,
-                    height: 66,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.person_rounded, size: 38, color: primaryOrange);
-                    },
-                  ),
+                  child:
+                      (_profilePictureUrl != null &&
+                          _profilePictureUrl!.isNotEmpty)
+                      ? Image.network(
+                          _profilePictureUrl!,
+                          width: 66,
+                          height: 66,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.person_rounded,
+                              size: 38,
+                              color: primaryOrange,
+                            );
+                          },
+                        )
+                      : Image.asset(
+                          'assets/images/driver_avatar.png',
+                          width: 66,
+                          height: 66,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.person_rounded,
+                              size: 38,
+                              color: primaryOrange,
+                            );
+                          },
+                        ),
                 ),
               ),
               Positioned(
@@ -738,14 +1615,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 bottom: -2,
                 child: GestureDetector(
                   onTap: () async {
-                    final messenger = ScaffoldMessenger.of(context);
                     final file = await FileUploadHelper.pickFileOrPhoto(
                       context,
                       title: 'Update Profile Photo',
                     );
-                    if (file != null) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Profile photo updated: ${file.name}')),
+                    if (file != null && mounted) {
+                      AppToast.success(
+                        context,
+                        'Profile photo updated: ${file.name}',
                       );
                     }
                   },
@@ -765,7 +1642,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     child: const Center(
-                      child: Icon(Icons.camera_alt_outlined, size: 12.5, color: slate600),
+                      child: Icon(
+                        Icons.camera_alt_outlined,
+                        size: 12.5,
+                        color: slate600,
+                      ),
                     ),
                   ),
                 ),
@@ -804,7 +1685,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 GestureDetector(
                   onTap: _showStatusBottomSheet,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3.5,
+                    ),
                     decoration: BoxDecoration(
                       color: _isOnline ? successGreenLight : slate100,
                       borderRadius: BorderRadius.circular(16),
@@ -820,7 +1704,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           width: 6.5,
                           height: 6.5,
                           decoration: BoxDecoration(
-                            color: _isOnline ? const Color(0xFF10B981) : slate400,
+                            color: _isOnline
+                                ? const Color(0xFF10B981)
+                                : slate400,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -850,9 +1736,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Edit Profile Action Button
           GestureDetector(
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-              );
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(
+                      builder: (_) => EditProfileScreen(
+                        initialName: _driverName,
+                        initialPhone: _cleanPhoneNumber(_phoneNumber),
+                        initialEmail: _emailAddress,
+                        initialAddress: _physicalAddress,
+                      ),
+                    ),
+                  )
+                  .then((_) => _loadProfileData());
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -970,13 +1865,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Container(
               width: 26,
               height: 26,
-              decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Icon(icon, size: 14, color: iconColor),
-              ),
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Center(child: Icon(icon, size: 14, color: iconColor)),
             ),
             const SizedBox(width: 5),
             Flexible(
@@ -1021,9 +1911,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildSegmentedTabBar() {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: slate200, width: 1.5),
-        ),
+        border: Border(bottom: BorderSide(color: slate200, width: 1.5)),
       ),
       child: Row(
         children: [
@@ -1037,7 +1925,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: _selectedTabIndex == 0 ? primaryOrange : Colors.transparent,
+                      color: _selectedTabIndex == 0
+                          ? primaryOrange
+                          : Colors.transparent,
                       width: 2.5,
                     ),
                   ),
@@ -1055,8 +1945,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'Personal Info',
                       style: TextStyle(
                         fontSize: 13.5,
-                        fontWeight: _selectedTabIndex == 0 ? FontWeight.w700 : FontWeight.w600,
-                        color: _selectedTabIndex == 0 ? primaryOrange : slate500,
+                        fontWeight: _selectedTabIndex == 0
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        color: _selectedTabIndex == 0
+                            ? primaryOrange
+                            : slate500,
                       ),
                     ),
                   ],
@@ -1075,7 +1969,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: _selectedTabIndex == 1 ? primaryOrange : Colors.transparent,
+                      color: _selectedTabIndex == 1
+                          ? primaryOrange
+                          : Colors.transparent,
                       width: 2.5,
                     ),
                   ),
@@ -1093,8 +1989,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'Documents',
                       style: TextStyle(
                         fontSize: 13.5,
-                        fontWeight: _selectedTabIndex == 1 ? FontWeight.w700 : FontWeight.w600,
-                        color: _selectedTabIndex == 1 ? primaryOrange : slate500,
+                        fontWeight: _selectedTabIndex == 1
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        color: _selectedTabIndex == 1
+                            ? primaryOrange
+                            : slate500,
                       ),
                     ),
                   ],
@@ -1148,12 +2048,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                  );
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute(
+                          builder: (_) => EditProfileScreen(
+                            initialName: _driverName,
+                            initialPhone: _cleanPhoneNumber(_phoneNumber),
+                            initialEmail: _emailAddress,
+                            initialAddress: _physicalAddress,
+                          ),
+                        ),
+                      )
+                      .then((_) => _loadProfileData());
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: slate50,
                     borderRadius: BorderRadius.circular(6),
@@ -1165,7 +2077,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       SizedBox(width: 4),
                       Text(
                         'Edit',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: slate600),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: slate600,
+                        ),
                       ),
                     ],
                   ),
@@ -1185,7 +2101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildInfoRow(
             icon: Icons.phone_outlined,
             label: 'Number',
-            value: _phoneNumber,
+            value: _cleanPhoneNumber(_phoneNumber),
           ),
           const SizedBox(height: 13),
           _buildInfoRow(
@@ -1408,7 +2324,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.description_outlined, color: primaryOrange, size: 19),
+                  Icon(
+                    Icons.description_outlined,
+                    color: primaryOrange,
+                    size: 19,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Documents & Verification',
@@ -1435,7 +2355,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     SizedBox(width: 2),
-                    Icon(Icons.chevron_right_rounded, size: 16, color: primaryOrange),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: primaryOrange,
+                    ),
                   ],
                 ),
               ),
@@ -1468,10 +2392,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   color: doc['iconBg'] as Color,
                   borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(color: doc['iconBorder'] as Color, width: 1),
+                  border: Border.all(
+                    color: doc['iconBorder'] as Color,
+                    width: 1,
+                  ),
                 ),
                 child: Center(
-                  child: Icon(doc['icon'] as IconData, size: 15, color: doc['iconColor'] as Color),
+                  child: Icon(
+                    doc['icon'] as IconData,
+                    size: 15,
+                    color: doc['iconColor'] as Color,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1490,7 +2421,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 8),
               if (isVerified)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: successGreenLight,
                     borderRadius: BorderRadius.circular(4.0),
@@ -1514,7 +2448,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               else
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFFBEB),
                     borderRadius: BorderRadius.circular(4.0),
@@ -1523,7 +2460,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time_rounded, size: 11, color: Color(0xFFD97706)),
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 11,
+                        color: Color(0xFFD97706),
+                      ),
                       SizedBox(width: 3),
                       Text(
                         'Pending',
@@ -1537,7 +2478,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded, size: 16, color: slate400),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: slate400,
+              ),
             ],
           ),
         ),
@@ -1546,8 +2491,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // =========================================================================
-  // 8. CARD 4: ACCOUNT & PREFERENCES
+  // 8. CARD 4: APP SETTINGS & SECURITY
   // =========================================================================
+  Future<void> _openSettingsScreen() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+    if (mounted) {
+      _loadProfileData();
+    }
+  }
+
+  Future<void> _togglePushPreference(bool enable) async {
+    if (_isUpdatingPush) return;
+    setState(() => _isUpdatingPush = true);
+
+    try {
+      if (enable) {
+        final granted = await NotificationService().requestPermissions();
+        if (!granted) {
+          if (!mounted) return;
+          setState(() {
+            _pushNotifications = false;
+            _isUpdatingPush = false;
+          });
+          AppToast.info(
+            context,
+            'Please enable notification permission in device settings.',
+          );
+          return;
+        }
+      }
+
+      setState(() => _pushNotifications = enable);
+      await LocalStorage().setBool(
+        AppConstants.keyPushNotificationsEnabled,
+        enable,
+      );
+
+      final token = await _getAuthToken();
+      if (token != null) {
+        final uri = Uri.parse(
+          '${ApiConstants.baseUrl}${ApiConstants.notificationSettings}',
+        );
+        await http
+            .post(
+              uri,
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
+              },
+              body: jsonEncode({'push_notifications_enabled': enable}),
+            )
+            .timeout(const Duration(seconds: 8));
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isUpdatingPush = false);
+    }
+  }
+
   Widget _buildAccountPreferencesCard() {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -1568,20 +2573,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           // Header Row
           InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
-            },
+            onTap: _openSettingsScreen,
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.settings, color: primaryOrange, size: 19),
+                    Icon(
+                      Icons.settings_outlined,
+                      color: primaryOrange,
+                      size: 19,
+                    ),
                     SizedBox(width: 8),
                     Text(
-                      'Account & Preferences',
+                      'App Settings & Security',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -1597,61 +2602,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 12),
 
           // Push Notifications
-          _buildPreferenceSwitchRow(
-            icon: Icons.notifications_none_rounded,
-            title: 'Push Notifications',
-            value: _pushNotifications,
-            onChanged: (val) => setState(() => _pushNotifications = val),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(
+                    Icons.notifications_none_rounded,
+                    size: 19,
+                    color: slate600,
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Push Notifications',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                      color: slate700,
+                    ),
+                  ),
+                ],
+              ),
+              Transform.scale(
+                scale: 0.85,
+                child: Switch(
+                  value: _pushNotifications,
+                  onChanged: _isUpdatingPush ? null : _togglePushPreference,
+                  activeThumbColor: primaryOrange,
+                  activeTrackColor: primaryOrange.withValues(alpha: 0.4),
+                  inactiveThumbColor: slate400,
+                  inactiveTrackColor: slate200,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
 
-          // Location Sharing
-          _buildPreferenceSwitchRow(
-            icon: Icons.map_outlined,
-            title: 'Location Sharing',
-            value: _locationSharing,
-            onChanged: (val) => setState(() => _locationSharing = val),
+          // Change App Password
+          InkWell(
+            onTap: _openSettingsScreen,
+            borderRadius: BorderRadius.circular(6),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 19,
+                        color: slate600,
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Change App Password',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: slate700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: slate400),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPreferenceSwitchRow({
-    required IconData icon,
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 19, color: slate600),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-                color: slate700,
-              ),
-            ),
-          ],
-        ),
-        Transform.scale(
-          scale: 0.85,
-          child: Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: primaryOrange,
-            activeTrackColor: primaryOrange.withValues(alpha: 0.4),
-            inactiveThumbColor: slate400,
-            inactiveTrackColor: slate200,
-          ),
-        ),
-      ],
     );
   }
 
@@ -1728,7 +2748,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   SizedBox(width: 4),
-                  Icon(Icons.arrow_forward_rounded, size: 13, color: Colors.white),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 13,
+                    color: Colors.white,
+                  ),
                 ],
               ),
             ),
@@ -1737,7 +2761,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
 
   // =========================================================================
   // 10. DEDICATED DOCUMENTS TAB VIEW (Matches User Screenshot)
@@ -1756,7 +2779,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.verified_user_outlined, color: Color(0xFF2563EB), size: 24),
+              Icon(
+                Icons.verified_user_outlined,
+                color: Color(0xFF2563EB),
+                size: 24,
+              ),
               SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1796,7 +2823,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               DocumentVerificationModal.show(
                 context,
                 onVerificationComplete: () {
-                  AppToast.success(context, 'Compliance documentation refreshed!');
+                  AppToast.success(
+                    context,
+                    'Compliance documentation refreshed!',
+                  );
+                  _loadProfileData();
                 },
               );
             },
@@ -1809,7 +2840,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: primaryOrange,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6.0),
+              ),
             ),
           ),
         ),
@@ -1903,7 +2936,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_outline_rounded, size: 12, color: successGreen),
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 12,
+                    color: successGreen,
+                  ),
                   SizedBox(width: 4),
                   Text(
                     'Verified',
@@ -1927,7 +2964,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.access_time_rounded, size: 12, color: Color(0xFFD97706)),
+                  Icon(
+                    Icons.access_time_rounded,
+                    size: 12,
+                    color: Color(0xFFD97706),
+                  ),
                   SizedBox(width: 4),
                   Text(
                     'Pending',
@@ -1944,33 +2985,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Three-Dot Popup Menu
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, size: 20, color: slate600),
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              size: 20,
+              color: slate600,
+            ),
             tooltip: 'Options',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             elevation: 3,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6.0),
+            ),
             onSelected: (action) {
               if (action == 'view') {
                 _openDocumentPreview(doc);
               } else if (action == 'front') {
-                _openDocumentSidePreview(title: doc['title'] as String, side: 'Front');
+                _openDocumentSidePreview(
+                  title: doc['title'] as String,
+                  side: 'Front',
+                );
               } else if (action == 'back') {
-                _openDocumentSidePreview(title: doc['title'] as String, side: 'Back');
+                _openDocumentSidePreview(
+                  title: doc['title'] as String,
+                  side: 'Back',
+                );
               } else if (action == 'upload') {
                 DocumentVerificationModal.show(
                   context,
                   onVerificationComplete: () {
                     AppToast.success(context, 'Document verification updated!');
+                    _loadProfileData();
                   },
                 );
               } else if (action == 'download') {
                 if (isVerified) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Downloading ${doc['title']}...')),
+                  AppToast.info(
+                    context,
+                    'Downloading ${doc['title']}...',
                   );
                 } else {
-                  AppToast.info(context, 'No document uploaded yet to download');
+                  AppToast.info(
+                    context,
+                    'No document uploaded yet to download',
+                  );
                 }
               }
             },
@@ -1981,7 +3039,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Icon(Icons.visibility_outlined, size: 16, color: slate700),
                     SizedBox(width: 10),
-                    Text('View Document', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: slate900)),
+                    Text(
+                      'View Document',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: slate900,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1990,9 +3055,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value: 'front',
                   child: Row(
                     children: [
-                      Icon(Icons.remove_red_eye_outlined, size: 16, color: primaryOrange),
+                      Icon(
+                        Icons.remove_red_eye_outlined,
+                        size: 16,
+                        color: primaryOrange,
+                      ),
                       SizedBox(width: 10),
-                      Text('View Front Side', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: slate900)),
+                      Text(
+                        'View Front Side',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: slate900,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -2000,9 +3076,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value: 'back',
                   child: Row(
                     children: [
-                      Icon(Icons.remove_red_eye_outlined, size: 16, color: primaryOrange),
+                      Icon(
+                        Icons.remove_red_eye_outlined,
+                        size: 16,
+                        color: primaryOrange,
+                      ),
                       SizedBox(width: 10),
-                      Text('View Back Side', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: slate900)),
+                      Text(
+                        'View Back Side',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: slate900,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -2011,9 +3098,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 value: 'upload',
                 child: Row(
                   children: [
-                    Icon(Icons.upload_file_outlined, size: 16, color: Color(0xFF0284C7)),
+                    Icon(
+                      Icons.upload_file_outlined,
+                      size: 16,
+                      color: Color(0xFF0284C7),
+                    ),
                     SizedBox(width: 10),
-                    Text('Upload / Re-verify', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: slate900)),
+                    Text(
+                      'Upload / Re-verify',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: slate900,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2023,7 +3121,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Icon(Icons.download_rounded, size: 16, color: successGreen),
                     SizedBox(width: 10),
-                    Text('Download Copy', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: slate900)),
+                    Text(
+                      'Download Copy',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: slate900,
+                      ),
+                    ),
                   ],
                 ),
               ),

@@ -1,9 +1,12 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../../../core/routes/app_routes.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/utils/app_toast.dart';
+import '../../data/repositories/auth_repository.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -15,6 +18,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  final _authRepository = AuthRepository();
   bool _isLoading = false;
   bool _emailSent = false;
   int _resendSeconds = 60;
@@ -53,32 +57,58 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void _handleResetPassword() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
+      final email = _emailController.text.trim();
 
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _emailSent = true;
-        });
-        _startResendTimer();
-        AppToast.success(
-          context,
-          '✓ Password reset link sent to ${_emailController.text.trim()}',
-          icon: Icons.mark_email_read_rounded,
-        );
+      try {
+        await _authRepository.forgotPassword(email: email);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _emailSent = true;
+          });
+          _startResendTimer();
+          AppToast.success(
+            context,
+            '✓ Password reset instructions sent to $email',
+            icon: Icons.mark_email_read_rounded,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          AppToast.error(
+            context,
+            e.toString().replaceAll('Exception: ', ''),
+            title: 'Request Failed',
+          );
+        }
       }
     }
   }
 
   void _handleResend() async {
     if (_resendSeconds > 0) return;
-    _startResendTimer();
-    AppToast.success(
-      context,
-      '✓ New reset link sent to ${_emailController.text.trim()}',
-      icon: Icons.send_rounded,
-    );
+    final email = _emailController.text.trim();
+    if (email.isEmpty) return;
+
+    try {
+      await _authRepository.forgotPassword(email: email);
+      _startResendTimer();
+      if (mounted) {
+        AppToast.success(
+          context,
+          '✓ New reset instructions sent to $email',
+          icon: Icons.send_rounded,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.error(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+        );
+      }
+    }
   }
 
   @override
@@ -156,11 +186,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: Text(
               'Enter your registered driver email address and we will send you a secure password reset link.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: textSub,
-                height: 1.45,
-              ),
+              style: TextStyle(fontSize: 13, color: textSub, height: 1.45),
             ),
           ),
           const SizedBox(height: 32),
@@ -178,13 +204,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(color: textMain, fontSize: 14, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: textMain,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
             decoration: InputDecoration(
               hintText: 'driver@example.com',
-              hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+              hintStyle: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
               filled: true,
               fillColor: inputFill,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: inputBorder),
@@ -199,7 +235,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+                borderSide: const BorderSide(
+                  color: Colors.redAccent,
+                  width: 1.5,
+                ),
               ),
             ),
             validator: Validators.validateEmail,
@@ -284,7 +323,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: primaryColor.withValues(alpha: 0.15),
-              border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 2),
+              border: Border.all(
+                color: primaryColor.withValues(alpha: 0.4),
+                width: 2,
+              ),
             ),
             child: const Center(
               child: Icon(
@@ -349,7 +391,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: const Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 20),
+              Icon(
+                Icons.info_outline_rounded,
+                color: Color(0xFF1877F2),
+                size: 20,
+              ),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -401,7 +447,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           height: 42,
           child: ElevatedButton.icon(
             onPressed: () {
-              Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+              Navigator.of(context)
+                  .pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
             },
             icon: const Icon(Icons.arrow_back_rounded, size: 16),
             label: const Text(

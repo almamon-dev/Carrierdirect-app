@@ -23,11 +23,21 @@ class AppDimensions {
   static const double radiusRound = 999.0;
 
   // BorderRadius objects
-  static final BorderRadius borderRadiusSmall = BorderRadius.circular(radiusSmall);
-  static final BorderRadius borderRadiusMedium = BorderRadius.circular(radiusMedium);
-  static final BorderRadius borderRadiusLarge = BorderRadius.circular(radiusLarge);
-  static final BorderRadius borderRadiusExtraLarge = BorderRadius.circular(radiusExtraLarge);
-  static final BorderRadius borderRadiusRound = BorderRadius.circular(radiusRound);
+  static final BorderRadius borderRadiusSmall = BorderRadius.circular(
+    radiusSmall,
+  );
+  static final BorderRadius borderRadiusMedium = BorderRadius.circular(
+    radiusMedium,
+  );
+  static final BorderRadius borderRadiusLarge = BorderRadius.circular(
+    radiusLarge,
+  );
+  static final BorderRadius borderRadiusExtraLarge = BorderRadius.circular(
+    radiusExtraLarge,
+  );
+  static final BorderRadius borderRadiusRound = BorderRadius.circular(
+    radiusRound,
+  );
 
   // Button Heights
   static const double buttonHeightSmall = 36.0;

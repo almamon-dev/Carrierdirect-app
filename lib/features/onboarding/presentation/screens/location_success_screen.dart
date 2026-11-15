@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/storage/local_storage.dart';
-
 
 class LocationSuccessScreen extends StatefulWidget {
   const LocationSuccessScreen({super.key});
@@ -43,7 +43,10 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
 
   Future<void> _handleContinue() async {
     // Mark location permission & onboarding step as complete
-    await _localStorage.setBool(AppConstants.keyLocationPermissionGranted, true);
+    await _localStorage.setBool(
+      AppConstants.keyLocationPermissionGranted,
+      true,
+    );
     await _localStorage.setBool(AppConstants.keyOnboardingCompleted, true);
 
     if (mounted) {
@@ -57,10 +60,8 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
         ),
       );
       // Navigate to the existing Driver Login screen
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.login,
-        (route) => false,
-      );
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
     }
   }
 
@@ -68,10 +69,9 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final screenHeight = mediaQuery.size.height;
-    // Hero banner taking ~60% of the screen height so the highway truck photo is fully showcased
-    final heroHeight = screenHeight * 0.60;
-    final bottomInset =
-        mediaQuery.padding.bottom > 0 ? mediaQuery.padding.bottom : 10.0;
+    final bottomInset = mediaQuery.padding.bottom > 0
+        ? mediaQuery.padding.bottom
+        : 12.0;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -83,7 +83,7 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
             top: 0,
             left: 0,
             right: 0,
-            height: heroHeight + 25,
+            height: screenHeight * 0.75,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -140,7 +140,6 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
 
           // 2. White Bottom Sheet Container with Top-Rounded Corners & Compact Spacing
           Positioned(
-            top: heroHeight - 20,
             left: 0,
             right: 0,
             bottom: 0,
@@ -163,10 +162,10 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
                 children: [
                   // Overlapping Folded Map with 3D Green Checkmark & Radiating Dashes
                   Positioned(
-                    top: -50,
+                    top: -48,
                     child: SizedBox(
-                      width: 140,
-                      height: 110,
+                      width: 136,
+                      height: 106,
                       child: Stack(
                         alignment: Alignment.center,
                         clipBehavior: Clip.none,
@@ -179,7 +178,8 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  const Color(0xFF10B981).withValues(alpha: 0.22),
+                                  const Color(0xFF10B981)
+                                      .withValues(alpha: 0.22),
                                   Colors.transparent,
                                 ],
                               ),
@@ -188,7 +188,7 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
 
                           // Radiating accent dashes (green)
                           const CustomPaint(
-                            size: Size(140, 110),
+                            size: Size(136, 106),
                             painter: _GreenRadiatingDashesPainter(
                               color: Color(0xFF10B981),
                             ),
@@ -197,8 +197,8 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
                           // Folded map image with green checkmark
                           Image.asset(
                             'assets/images/folded_map_success.png',
-                            width: 130,
-                            height: 104,
+                            width: 126,
+                            height: 100,
                             fit: BoxFit.contain,
                             errorBuilder: (_, _, _) => Container(
                               width: 64,
@@ -219,59 +219,44 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
                     ),
                   ),
 
-                  // Sheet Body Content with Balanced Spacing
+                  // Sheet Body Content with Compact Spacing (no extra middle gap)
                   Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      24,
-                      56,
-                      24,
-                      bottomInset + 8,
-                    ),
+                    padding: EdgeInsets.fromLTRB(24, 52, 24, bottomInset + 12),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            SizedBox(height: 6),
-
-                            // Title: "Location Enabled!"
-                            Text(
-                              'Location Enabled!',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            SizedBox(height: 10),
-
-                            // Subtitle
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(
-                                'Your location is now enabled. We can find nearby loads, provide navigation, and track your deliveries in real-time.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
-                                  color: Color(0xFF64748B),
-                                  height: 1.45,
-                                ),
-                              ),
-                            ),
-                          ],
+                        // Title: "Location Enabled!"
+                        const Text(
+                          'Location Enabled!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.5,
+                          ),
                         ),
+                        const SizedBox(height: 8),
+
+                        // Subtitle
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            'Your location is now enabled. We can find nearby loads, provide navigation, and track your deliveries in real-time.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF64748B),
+                              height: 1.42,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 22),
 
                         // Primary Orange Button: "Continue ->" with rounded-[5px]
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: _buildContinueButton(),
-                        ),
+                        _buildContinueButton(),
                       ],
                     ),
                   ),
@@ -294,10 +279,7 @@ class _LocationSuccessScreenState extends State<LocationSuccessScreen> {
         gradient: const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            Color(0xFFFF5722),
-            Color(0xFFFF3D00),
-          ],
+          colors: [Color(0xFFFF5722), Color(0xFFFF3D00)],
         ),
         boxShadow: [
           BoxShadow(

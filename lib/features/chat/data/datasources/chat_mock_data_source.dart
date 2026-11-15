@@ -67,7 +67,8 @@ class ChatMockDataSource {
             senderId: 'david_sup',
             senderName: 'David Miller',
             senderRole: MessageSenderRole.supplierEmployee,
-            message: 'Hello Captain! Load #$shipmentId is staged at Bay 4. Security seal #SEAL-88902 is verified and ready for pickup.',
+            message:
+                'Hello Captain! Load #$shipmentId is staged at Bay 4. Security seal #SEAL-88902 is verified and ready for pickup.',
             timestamp: now.subtract(const Duration(minutes: 45)),
             isFromDriver: false,
           ),
@@ -113,7 +114,8 @@ class ChatMockDataSource {
             senderId: 'sarah_cust',
             senderName: 'Sarah Jenkins',
             senderRole: MessageSenderRole.customerReceiver,
-            message: 'Hi Driver! We are expecting shipment #$shipmentId. Please enter through North Gate 2 on 5th Avenue.',
+            message:
+                'Hi Driver! We are expecting shipment #$shipmentId. Please enter through North Gate 2 on 5th Avenue.',
             timestamp: now.subtract(const Duration(minutes: 25)),
             isFromDriver: false,
           ),
@@ -154,7 +156,8 @@ class ChatMockDataSource {
     if (channels != null) {
       final index = channels.indexWhere((c) => c.id == channelId);
       if (index != -1) {
-        final updatedList = List<ChatMessage>.from(channels[index].messages)..add(message);
+        final updatedList = List<ChatMessage>.from(channels[index].messages)
+          ..add(message);
         channels[index] = ChatChannel(
           id: channels[index].id,
           shipmentId: channels[index].shipmentId,

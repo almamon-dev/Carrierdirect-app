@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../../core/routes/app_routes.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_button.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -13,7 +15,10 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final List<TextEditingController> _controllers = List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _controllers = List.generate(
+    4,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
   bool _isLoading = false;
 
@@ -35,11 +40,9 @@ class _OtpScreenState extends State<OtpScreen> {
       await Future.delayed(const Duration(milliseconds: 1000));
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: AppColors.success,
-            content: Text('Verification successful! Please set a new password.'),
-          ),
+        AppToast.success(
+          context,
+          'Verification successful! Please set a new password.',
         );
         Navigator.of(context).pushReplacementNamed(AppRoutes.login);
       }
@@ -54,7 +57,11 @@ class _OtpScreenState extends State<OtpScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppColors.textPrimary,
+            size: 20,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -71,7 +78,10 @@ class _OtpScreenState extends State<OtpScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
                   ),
                   child: const Icon(
                     Icons.mark_email_read_outlined,
@@ -116,18 +126,28 @@ class _OtpScreenState extends State<OtpScreen> {
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       maxLength: 1,
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                       decoration: InputDecoration(
                         counterText: '',
                         filled: true,
                         fillColor: AppColors.surface,
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppColors.border, width: 1),
+                          borderSide: const BorderSide(
+                            color: AppColors.border,
+                            width: 1,
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 2,
+                          ),
                         ),
                       ),
                       onChanged: (value) {
@@ -167,8 +187,9 @@ class _OtpScreenState extends State<OtpScreen> {
                   ),
                   GestureDetector(
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Resent verification code!')),
+                      AppToast.info(
+                        context,
+                        'Resent verification code!',
                       );
                     },
                     child: const Text(

@@ -1,12 +1,15 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../services/notification_service.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/wave_processing_indicator.dart';
-import 'terms_conditions_screen.dart';
+import '../../data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
+import 'terms_conditions_screen.dart';
 
 /// Ultra-Clean Minimalist Flat Dark Login Screen for CarrierDirect Driver App
 class LoginScreen extends StatefulWidget {
@@ -29,7 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color darkBg = Color(0xFF0F172A); // Clean Slate-900 Canvas
   static const Color cardBg = Color(0xFF1E293B); // Slate-800 Input Fill
   static const Color borderCol = Color(0xFF334155); // Slate-700 Border
-  static const Color borderFocus = Color(0xFFFF5722); // CarrierDirect Vibrant Orange
+  static const Color borderFocus = Color(
+    0xFFFF5722,
+  ); // CarrierDirect Vibrant Orange
   static const Color textWhite = Color(0xFFF8FAFC); // Clean White Header
   static const Color textMuted = Color(0xFF94A3B8); // Slate-400 Caption
   static const Color primaryOrange = Color(0xFFFF5722); // Brand Orange
@@ -44,16 +49,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _fillDevCredentials() {
     setState(() {
-      _emailController.text = 'mamon193p@gmail.com';
-      _passwordController.text = '12345678';
+      _emailController.text = 'balbrigganconnected@gmail.com';
+      _passwordController.text = 'password';
       _rememberMe = true;
     });
-    AppToast.info(
-      context,
-      'Demo driver credentials filled (amon193p@gmail.com)',
-      title: 'Demo Account Ready',
-      icon: Icons.bolt_rounded,
-    );
   }
 
   void _handleLogin() async {
@@ -71,39 +70,238 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      AppToast.success(
-        context,
-        'Welcome back, ${user.fullName.isNotEmpty ? user.fullName : "Driver"}! You are online & ready for dispatch.',
-        title: 'Signed In Successfully',
-        icon: Icons.verified_user_rounded,
-      );
-
-      final isNotificationGranted = await NotificationService().checkPermission();
-      if (!mounted) return;
-
-      if (user.verificationStatus == 'pending_setup' && !user.isVerified) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.profileSetup);
-      } else if (isNotificationGranted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
-      } else {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.notificationPermission);
+      if (user.requires2fa && (user.token == null || user.token!.isEmpty)) {
+        final targetEmail = user.email.isNotEmpty
+            ? user.email
+            : _emailController.text.trim();
+        await _showTwoFactorVerificationSheet(targetEmail, authRepository);
+        return;
       }
+
+      await _navigateAfterAuthenticated(user);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       String errorMsg = e.toString();
-      if (errorMsg.contains('ApiException:') || errorMsg.contains('Exception:')) {
+      if (errorMsg.contains('ApiException:') ||
+          errorMsg.contains('Exception:')) {
         errorMsg = errorMsg.replaceFirst(RegExp(r'.*Exception:\s*'), '');
       }
 
       AppToast.error(
         context,
-        errorMsg.isNotEmpty ? errorMsg : 'Invalid email or password. Please try again.',
+        errorMsg.isNotEmpty
+            ? errorMsg
+            : 'Invalid email or password. Please try again.',
         title: 'Authentication Failed',
         icon: Icons.error_outline_rounded,
       );
     }
+  }
+
+  Future<void> _navigateAfterAuthenticated(UserModel user) async {
+    final isNotificationGranted = await NotificationService().checkPermission();
+    if (!mounted) return;
+
+    final status = user.verificationStatus?.toLowerCase();
+    final isVerified =
+        user.isVerified || status == 'verified' || status == 'approved';
+
+    if (!isVerified) {
+      if (status == 'pending_setup') {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.profileSetup);
+      } else {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.adminApproval);
+      }
+    } else if (isNotificationGranted) {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+    } else {
+      Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.notificationPermission);
+    }
+  }
+
+  Future<void> _showTwoFactorVerificationSheet(
+    String email,
+    AuthRepository authRepository,
+  ) async {
+    final codeController = TextEditingController();
+    bool isVerifying = false;
+    String? inlineError;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: borderCol,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.shield_outlined,
+                            color: primaryOrange,
+                            size: 22,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Two-Factor Verification',
+                              style: TextStyle(
+                                color: textWhite,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Enter the 6-digit verification code from your Authenticator app for $email.',
+                        style: const TextStyle(
+                          color: textMuted,
+                          fontSize: 12.5,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        controller: codeController,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: textWhite,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 8,
+                        ),
+                        decoration: _inputDecoration(
+                          hint: '000000',
+                          prefixIcon: Icons.pin_outlined,
+                        ),
+                      ),
+                      if (inlineError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          inlineError!,
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryOrange,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          onPressed: isVerifying
+                              ? null
+                              : () async {
+                                  final code = codeController.text.trim();
+                                  if (code.length != 6) {
+                                    setSheetState(() {
+                                      inlineError =
+                                          'Please enter the 6-digit code.';
+                                    });
+                                    return;
+                                  }
+                                  setSheetState(() {
+                                    isVerifying = true;
+                                    inlineError = null;
+                                  });
+                                  try {
+                                    final verifiedUser = await authRepository
+                                        .verify2faLogin(
+                                          email: email,
+                                          code: code,
+                                        );
+                                    if (!ctx.mounted) return;
+                                    Navigator.of(ctx).pop();
+                                    await _navigateAfterAuthenticated(
+                                      verifiedUser,
+                                    );
+                                  } catch (err) {
+                                    String msg = err.toString().replaceFirst(
+                                      RegExp(r'.*Exception:\s*'),
+                                      '',
+                                    );
+                                    setSheetState(() {
+                                      isVerifying = false;
+                                      inlineError = msg.isNotEmpty
+                                          ? msg
+                                          : 'Invalid verification code.';
+                                    });
+                                  }
+                                },
+                          child: isVerifying
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Verify & Sign In',
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -116,7 +314,10 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Center(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 16.0,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
@@ -194,7 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                     decoration: _inputDecoration(
-                      hint: 'mamon193p@gmail.com',
+                      hint: 'balbrigganconnected@gmail.com',
                       prefixIcon: Icons.mail_outline_rounded,
                     ),
                     validator: Validators.validateEmail,
@@ -427,10 +628,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           SizedBox(width: 6),
                           Text(
                             'Need dispatch help? ',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: textMuted,
-                            ),
+                            style: TextStyle(fontSize: 12.5, color: textMuted),
                           ),
                           Text(
                             'Contact Fleet',
@@ -526,11 +724,7 @@ class _LoginScreenState extends State<LoginScreen> {
         fontSize: 13.5,
         fontWeight: FontWeight.w400,
       ),
-      prefixIcon: Icon(
-        prefixIcon,
-        size: 19,
-        color: textMuted,
-      ),
+      prefixIcon: Icon(prefixIcon, size: 19, color: textMuted),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: cardBg,

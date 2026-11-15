@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/local_storage.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../trips/presentation/screens/bol_paperwork_screen.dart';
-import '../../../trips/presentation/screens/live_tracking_screen.dart';
+import '../../../trips/presentation/screens/in_app_navigation_screen.dart';
 import '../../../trips/presentation/screens/shipment_details_screen.dart';
 import '../../../trips/presentation/screens/trips_screen.dart';
-import '../../data/datasources/notifications_mock_data_source.dart';
 import '../../data/models/notification_model.dart';
 
 class NotificationDetailsScreen extends StatefulWidget {
@@ -19,7 +24,8 @@ class NotificationDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<NotificationDetailsScreen> createState() => _NotificationDetailsScreenState();
+  State<NotificationDetailsScreen> createState() =>
+      _NotificationDetailsScreenState();
 }
 
 class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
@@ -37,9 +43,49 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
     super.initState();
     _notif = widget.notification;
     if (!_notif.isRead) {
-      NotificationsMockDataSource.markAsRead(_notif.id);
+      _markReadApi(_notif.id);
       _notif = _notif.copyWith(isRead: true);
     }
+  }
+
+  Future<void> _markReadApi(String id) async {
+    try {
+      final token =
+          await SecureStorage().read(AppConstants.keyAuthToken) ??
+          await LocalStorage().getString(AppConstants.keyAuthToken);
+      if (token == null) return;
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}/driver/notifications/$id/read',
+      );
+      await http
+          .post(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {}
+  }
+
+  Future<void> _deleteApi(String id) async {
+    try {
+      final token =
+          await SecureStorage().read(AppConstants.keyAuthToken) ??
+          await LocalStorage().getString(AppConstants.keyAuthToken);
+      if (token == null) return;
+      final uri = Uri.parse('${ApiConstants.baseUrl}/driver/notifications/$id');
+      await http
+          .delete(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {}
   }
 
   Color _getCategoryColor(NotificationCategory category) {
@@ -102,18 +148,18 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => LiveTrackingScreen(
+            builder: (_) => InAppNavigationScreen(
               shipment: ShipmentItem(
                 id: shipmentId,
                 status: ShipmentFilter.inProgress,
-                originTitle: 'ABC Warehouse Logistics',
-                originAddress: 'Bay 4, Port Logistics Park',
+                originTitle: 'Warehouse Logistics',
+                originAddress: 'Port Logistics Park',
                 destTitle: 'Starlight Supermarket Central',
                 destAddress: 'Dock 12, 742 Evergreen Terrace',
                 date: 'Today',
                 time: '04:30 PM',
-                cargoType: 'Refrigerated Dairy & Goods',
-                distanceKm: 42.8,
+                cargoType: 'Commercial Goods',
+                distanceKm: 25.0,
                 statusLabel: 'In Transit',
               ),
             ),
@@ -162,7 +208,7 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
   }
 
   void _deleteNotification() {
-    NotificationsMockDataSource.deleteNotification(_notif.id);
+    _deleteApi(_notif.id);
     widget.onDeleted?.call();
     Navigator.pop(context);
     AppToast.info(context, 'Notification removed');
@@ -181,12 +227,20 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: textMain),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 16,
+            color: textMain,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           catTitle,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textMain),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: textMain,
+          ),
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -194,7 +248,11 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              color: Color(0xFFEF4444),
+              size: 20,
+            ),
             onPressed: _deleteNotification,
           ),
         ],
@@ -243,7 +301,10 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: catColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
@@ -261,7 +322,10 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 '${_notif.formattedDateTime} • ${_notif.timeAgo}',
-                                style: const TextStyle(fontSize: 11, color: textSub),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: textSub,
+                                ),
                               ),
                             ],
                           ),
@@ -281,7 +345,11 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                     const SizedBox(height: 4),
                     Text(
                       _notif.message,
-                      style: const TextStyle(fontSize: 12.5, color: textSub, height: 1.3),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: textSub,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),
@@ -302,7 +370,11 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                   children: [
                     const Text(
                       'Logistics Instructions & Details',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textMain),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textMain,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -340,18 +412,42 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                   children: [
                     const Text(
                       'Reference & Facility Information',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textMain),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textMain,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     if (_notif.shipmentId != null)
-                      _buildMetaRow(Icons.inventory_2_outlined, 'Load Reference:', '#${_notif.shipmentId!}'),
+                      _buildMetaRow(
+                        Icons.inventory_2_outlined,
+                        'Load Reference:',
+                        '#${_notif.shipmentId!}',
+                      ),
                     if (_notif.locationName != null)
-                      _buildMetaRow(Icons.location_on_outlined, 'Assigned Dock / Bay:', _notif.locationName!),
+                      _buildMetaRow(
+                        Icons.location_on_outlined,
+                        'Assigned Dock / Bay:',
+                        _notif.locationName!,
+                      ),
                     if (_notif.locationAddress != null)
-                      _buildMetaRow(Icons.map_outlined, 'Facility Address:', _notif.locationAddress!),
+                      _buildMetaRow(
+                        Icons.map_outlined,
+                        'Facility Address:',
+                        _notif.locationAddress!,
+                      ),
                     if (_notif.senderName != null)
-                      _buildMetaRow(Icons.person_outline_rounded, 'Dispatched By:', _notif.senderName!),
-                    _buildMetaRow(Icons.verified_outlined, 'Notice Status:', 'Verified & Handled'),
+                      _buildMetaRow(
+                        Icons.person_outline_rounded,
+                        'Dispatched By:',
+                        _notif.senderName!,
+                      ),
+                    _buildMetaRow(
+                      Icons.verified_outlined,
+                      'Notice Status:',
+                      'Verified & Handled',
+                    ),
                   ],
                 ),
               ),
@@ -364,16 +460,24 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                   height: 38,
                   child: ElevatedButton.icon(
                     onPressed: _handlePrimaryAction,
-                    icon: Icon(_notif.actionIcon ?? Icons.arrow_forward_rounded, size: 16),
+                    icon: Icon(
+                      _notif.actionIcon ?? Icons.arrow_forward_rounded,
+                      size: 16,
+                    ),
                     label: Text(
                       _notif.actionLabel!,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
@@ -389,9 +493,17 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: textSub,
                     side: const BorderSide(color: cardBorder),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('Back to Notifications', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+                  child: const Text(
+                    'Back to Notifications',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -415,7 +527,11 @@ class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textMain),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: textMain,
+              ),
               textAlign: TextAlign.end,
             ),
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../utils/app_toast.dart';
 
 class ComingSoonModal extends StatefulWidget {
@@ -89,7 +90,10 @@ class _ComingSoonModalState extends State<ComingSoonModal> {
                       const Color(0xFFF59E0B).withValues(alpha: 0.1),
                     ],
                   ),
-                  border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 2),
+                  border: Border.all(
+                    color: primaryColor.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
                 ),
                 child: Center(
                   child: Icon(widget.icon, size: 36, color: primaryColor),
@@ -99,16 +103,25 @@ class _ComingSoonModalState extends State<ComingSoonModal> {
 
               // Status Pill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                  ),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.auto_awesome_rounded, color: Color(0xFFD97706), size: 13),
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Color(0xFFD97706),
+                      size: 13,
+                    ),
                     SizedBox(width: 5),
                     Text(
                       'COMING SOON',
@@ -150,7 +163,10 @@ class _ComingSoonModalState extends State<ComingSoonModal> {
 
               // Notify Me Toggle Box
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: inputBg,
                   borderRadius: BorderRadius.circular(12),
@@ -158,7 +174,11 @@ class _ComingSoonModalState extends State<ComingSoonModal> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.notifications_active_outlined, color: primaryColor, size: 18),
+                    const Icon(
+                      Icons.notifications_active_outlined,
+                      color: primaryColor,
+                      size: 18,
+                    ),
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Column(
@@ -166,7 +186,11 @@ class _ComingSoonModalState extends State<ComingSoonModal> {
                         children: [
                           Text(
                             'Notify Me on Launch',
-                            style: TextStyle(color: Color(0xFF050505), fontSize: 12.5, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              color: Color(0xFF050505),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           SizedBox(height: 1),
                           Text(
@@ -194,16 +218,24 @@ class _ComingSoonModalState extends State<ComingSoonModal> {
                   onPressed: () {
                     Navigator.pop(context);
                     if (_notifyMe) {
-                      AppToast.info(context, "We'll notify you as soon as ${widget.featureName} is ready!");
+                      AppToast.info(
+                        context,
+                        "We'll notify you as soon as ${widget.featureName} is ready!",
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0.5,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('Got It', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Got It',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
               const SizedBox(height: 6),

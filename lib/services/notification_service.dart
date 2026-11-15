@@ -22,9 +22,12 @@ class NotificationService {
   Future<bool> requestPermissions() async {
     try {
       final status = await Permission.notification.request();
+      if (status.isPermanentlyDenied) {
+        await openAppSettings();
+      }
       return status.isGranted || status.isLimited;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 

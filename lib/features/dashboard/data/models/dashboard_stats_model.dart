@@ -13,13 +13,28 @@ class DashboardStatsModel {
     required this.activeHours,
   });
 
+  factory DashboardStatsModel.fromJson(Map<String, dynamic> json) {
+    return DashboardStatsModel(
+      activeLoads:
+          int.tryParse(json['active_shipments']?.toString() ?? '') ??
+          (int.tryParse(json['total_assigned']?.toString() ?? '') ?? 0),
+      completedTrips:
+          int.tryParse(json['delivered_count']?.toString() ?? '') ?? 0,
+      totalDistanceKm:
+          double.tryParse(json['total_distance_km']?.toString() ?? '') ?? 0.0,
+      rating: double.tryParse(json['driver_rating']?.toString() ?? '') ?? 5.0,
+      activeHours:
+          double.tryParse(json['active_hours']?.toString() ?? '') ?? 8.0,
+    );
+  }
+
   factory DashboardStatsModel.mock() {
     return const DashboardStatsModel(
-      activeLoads: 2,
-      completedTrips: 8,
-      totalDistanceKm: 142.6,
-      rating: 4.95,
-      activeHours: 6.5,
+      activeLoads: 0,
+      completedTrips: 0,
+      totalDistanceKm: 0.0,
+      rating: 5.0,
+      activeHours: 0.0,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/storage/secure_storage.dart';
@@ -55,7 +56,10 @@ class LogoutHelper {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEE2E2),
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFFECACA), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFFECACA),
+                    width: 1.5,
+                  ),
                 ),
                 child: const Icon(
                   Icons.logout_rounded,
@@ -130,7 +134,11 @@ class LogoutHelper {
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.logout_rounded, color: Colors.white, size: 18),
+                          Icon(
+                            Icons.logout_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                           SizedBox(width: 8),
                           Text(
                             'Log Out',
@@ -231,16 +239,9 @@ class LogoutHelper {
     );
 
     if (context.mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.login,
-        (route) => false,
-      );
-      AppToast.info(
-        context,
-        'You have been safely signed out. Have a safe journey!',
-        title: 'Signed Out Successfully',
-        icon: Icons.check_circle_rounded,
-      );
+      AppToast.dismiss();
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
     }
   }
 }

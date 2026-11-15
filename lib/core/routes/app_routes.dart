@@ -16,6 +16,7 @@ class AppRoutes {
 
   // Screen 6: Profile Setup ("Complete Your Profile")
   static const String profileSetup = '/profile/setup';
+  static const String adminApproval = '/admin-approval';
   static const String profile = '/profile';
   static const String editProfile = '/profile/edit';
 

@@ -1,5 +1,6 @@
-package com.example.driver_app
+package com.carrierdirect.driver
 
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity()
+

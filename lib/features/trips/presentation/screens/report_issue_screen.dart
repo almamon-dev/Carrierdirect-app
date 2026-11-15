@@ -1,6 +1,8 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/wave_processing_indicator.dart';
@@ -41,10 +43,16 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     {
       'id': 'DOCK_DETENTION',
       'title': 'Dock Detention (>2 Hours Delay)',
-      'subtitle': 'Waiting for bay assignment, lumper crew, or forklift unloader',
+      'subtitle':
+          'Waiting for bay assignment, lumper crew, or forklift unloader',
       'icon': Icons.hourglass_top_rounded,
       'color': Color(0xFFD97706),
-      'presets': ['Bay 4 Blocked by Inbound Rig', 'Lumpers Not Available', 'Forklift Breakdown at Dock', 'Stuck in Staging Yard > 2.5 hrs'],
+      'presets': [
+        'Bay 4 Blocked by Inbound Rig',
+        'Lumpers Not Available',
+        'Forklift Breakdown at Dock',
+        'Stuck in Staging Yard > 2.5 hrs',
+      ],
     },
     {
       'id': 'CARGO_DAMAGE',
@@ -52,15 +60,26 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       'subtitle': 'Crushed cartons, broken trailer bolt seal, shifting freight',
       'icon': Icons.inventory_2_outlined,
       'color': Color(0xFFEF4444),
-      'presets': ['Pallet #3 Crushed in Corner', 'Trailer Bolt Seal #9921 Broken', 'Wet Goods Water Leakage', 'Temperature Sensor Alert (-12°C)'],
+      'presets': [
+        'Pallet #3 Crushed in Corner',
+        'Trailer Bolt Seal #9921 Broken',
+        'Wet Goods Water Leakage',
+        'Temperature Sensor Alert (-12°C)',
+      ],
     },
     {
       'id': 'RIG_BREAKDOWN',
       'title': 'Rig Breakdown & Mechanical Issue',
-      'subtitle': 'Flat tire, air brake pressure drop, reefer cooling malfunction',
+      'subtitle':
+          'Flat tire, air brake pressure drop, reefer cooling malfunction',
       'icon': Icons.build_circle_outlined,
       'color': Color(0xFFDC2626),
-      'presets': ['Steer Tire Puncture on I-95', 'Reefer Unit Error Code #04', 'Air Brake Pressure Leak', 'Engine Check Light & Loss of Power'],
+      'presets': [
+        'Steer Tire Puncture on I-95',
+        'Reefer Unit Error Code #04',
+        'Air Brake Pressure Leak',
+        'Engine Check Light & Loss of Power',
+      ],
     },
     {
       'id': 'ROUTE_ROADBLOCK',
@@ -68,7 +87,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       'subtitle': 'Bridge height restriction, road closure, snow storm barrier',
       'icon': Icons.alt_route_rounded,
       'color': Color(0xFF0284C7),
-      'presets': ['I-95 North Exit 14 Closed for Detour', 'Severe Blizzard Warning Route Bypass', 'Low Clearance Bridge (< 13ft 6in)'],
+      'presets': [
+        'I-95 North Exit 14 Closed for Detour',
+        'Severe Blizzard Warning Route Bypass',
+        'Low Clearance Bridge (< 13ft 6in)',
+      ],
     },
     {
       'id': 'GATE_REFUSAL',
@@ -76,7 +99,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       'subtitle': 'Gate pass rejected, receiver missed appointment, dock shut',
       'icon': Icons.door_front_door_outlined,
       'color': Color(0xFF9333EA),
-      'presets': ['Gate Security Refused Entry', 'Receiver Shift Ended Early', 'Consignee Manager Unreachable by Phone'],
+      'presets': [
+        'Gate Security Refused Entry',
+        'Receiver Shift Ended Early',
+        'Consignee Manager Unreachable',
+      ],
     },
     {
       'id': 'BOL_DISCREPANCY',
@@ -84,7 +111,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       'subtitle': 'Shipper signature missing, piece count mismatch, wrong PO#',
       'icon': Icons.description_outlined,
       'color': Color(0xFF059669),
-      'presets': ['Shipper Refused to Sign BOL', 'Piece Count Mismatch (-4 Cases)', 'Missing Purchase Order #PO-8821 on Paperwork'],
+      'presets': [
+        'Shipper Refused to Sign BOL',
+        'Piece Count Mismatch (-4 Cases)',
+        'Missing Purchase Order #PO-8821 on Paperwork',
+      ],
     },
   ];
 
@@ -103,7 +134,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         setState(() {
           _attachedPhoto = File(picked.path);
         });
-        AppToast.success(context, 'Incident photo attached', icon: Icons.camera_alt_rounded);
+        AppToast.success(
+          context,
+          'Incident photo attached',
+          icon: Icons.camera_alt_rounded,
+        );
       }
     } catch (_) {
       if (!mounted) return;
@@ -131,7 +166,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     if (mounted) {
       setState(() => _isSubmitting = false);
       final selectedCat = _issueCategories[_selectedCategoryIndex];
-      final ticketId = 'TKT-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      final ticketId =
+          'TKT-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
       Navigator.pop(context);
       AppToast.success(
@@ -155,7 +191,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         scrolledUnderElevation: 1,
         shadowColor: cardBorder,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textMain),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 18,
+            color: textMain,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -163,7 +203,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
           children: [
             const Text(
               'Report Logistics Incident',
-              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: textMain),
+              style: TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.bold,
+                color: textMain,
+              ),
             ),
             Text(
               'Load #${widget.shipmentId} • 24/7 Dispatch Desk',
@@ -201,16 +245,27 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.local_shipping_rounded, color: primaryColor, size: 16),
+                            const Icon(
+                              Icons.local_shipping_rounded,
+                              color: primaryColor,
+                              size: 16,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'Freightliner Cascadia #TRK-104',
-                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                                color: textMain,
+                              ),
                             ),
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFF7ED),
                             borderRadius: BorderRadius.circular(6),
@@ -218,7 +273,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                           ),
                           child: const Text(
                             '53ft Reefer Unit',
-                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFC2410C)),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFC2410C),
+                            ),
                           ),
                         ),
                       ],
@@ -228,23 +287,47 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.radio_button_checked_rounded, color: Color(0xFFEA580C), size: 13),
+                        const Icon(
+                          Icons.radio_button_checked_rounded,
+                          color: Color(0xFFEA580C),
+                          size: 13,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            widget.originTitle.isNotEmpty ? widget.originTitle : 'ABC Warehouse Logistics',
-                            style: const TextStyle(fontSize: 11.5, color: textMain, fontWeight: FontWeight.w500),
+                            widget.originTitle.isNotEmpty
+                                ? widget.originTitle
+                                : 'ABC Warehouse Logistics',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: textMain,
+                              fontWeight: FontWeight.w500,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const Icon(Icons.arrow_forward_rounded, color: textSub, size: 12),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: textSub,
+                          size: 12,
+                        ),
                         const SizedBox(width: 6),
-                        const Icon(Icons.location_on_rounded, color: Color(0xFF0284C7), size: 13),
+                        const Icon(
+                          Icons.location_on_rounded,
+                          color: Color(0xFF0284C7),
+                          size: 13,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            widget.destTitle.isNotEmpty ? widget.destTitle : 'Starlight Supermarket Central',
-                            style: const TextStyle(fontSize: 11.5, color: textMain, fontWeight: FontWeight.w500),
+                            widget.destTitle.isNotEmpty
+                                ? widget.destTitle
+                                : 'Starlight Supermarket Central',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: textMain,
+                              fontWeight: FontWeight.w500,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -259,7 +342,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               // 2. Incident Category Title
               const Text(
                 'Select Incident Category',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: textMain),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.bold,
+                  color: textMain,
+                ),
               ),
               const SizedBox(height: 8),
 
@@ -273,9 +360,14 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   onTap: () => setState(() => _selectedCategoryIndex = index),
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : const Color(0xFFF8FAFC),
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: isSelected ? primaryColor : cardBorder,
@@ -300,7 +392,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                             color: color.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(cat['icon'] as IconData, color: color, size: 18),
+                          child: Icon(
+                            cat['icon'] as IconData,
+                            color: color,
+                            size: 18,
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -311,20 +407,29 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                                 cat['title'] as String,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                  color: isSelected ? textMain : textMain.withValues(alpha: 0.9),
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: isSelected
+                                      ? textMain
+                                      : textMain.withValues(alpha: 0.9),
                                 ),
                               ),
                               const SizedBox(height: 1.5),
                               Text(
                                 cat['subtitle'] as String,
-                                style: const TextStyle(fontSize: 10.5, color: textSub),
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: textSub,
+                                ),
                               ),
                             ],
                           ),
                         ),
                         Icon(
-                          isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                          isSelected
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_unchecked_rounded,
                           color: isSelected ? primaryColor : textSub,
                           size: 18,
                         ),
@@ -342,7 +447,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                 children: [
                   const Text(
                     'Quick Incident Presets (1-Tap)',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: textMain,
+                    ),
                   ),
                   const Text(
                     'Tap to add',
@@ -359,7 +468,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                     onTap: () => _addPresetText(preset),
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4.5,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFEFF6FF),
                         borderRadius: BorderRadius.circular(6),
@@ -368,11 +480,19 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.add_rounded, size: 12, color: Color(0xFF1D4ED8)),
+                          const Icon(
+                            Icons.add_rounded,
+                            size: 12,
+                            color: Color(0xFF1D4ED8),
+                          ),
                           const SizedBox(width: 3),
                           Text(
                             preset,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E40AF),
+                            ),
                           ),
                         ],
                       ),
@@ -386,7 +506,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               // 4. Priority / Urgency Level
               const Text(
                 'Incident Urgency Priority',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: textMain,
+                ),
               ),
               const SizedBox(height: 6),
               Row(
@@ -395,7 +519,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   const SizedBox(width: 8),
                   _buildPriorityChip('Medium (Delay)', const Color(0xFFD97706)),
                   const SizedBox(width: 8),
-                  _buildPriorityChip('High (Immediate)', const Color(0xFFEF4444)),
+                  _buildPriorityChip(
+                    'High (Immediate)',
+                    const Color(0xFFEF4444),
+                  ),
                 ],
               ),
 
@@ -404,7 +531,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               // 5. Driver Description & Notes
               const Text(
                 'Driver Incident Details & Notes',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: textMain,
+                ),
               ),
               const SizedBox(height: 6),
               Container(
@@ -419,7 +550,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   style: const TextStyle(fontSize: 13, color: textMain),
                   decoration: const InputDecoration(
                     hintText: 'Enter dock gate #, breakdown milestone, or incident explanation...',
-                    hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12,
+                    ),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.all(10),
                   ),
@@ -434,12 +568,23 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                 children: [
                   const Text(
                     'Attach Photo Proof (Damage / Gate / Rig)',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: textMain,
+                    ),
                   ),
                   if (_attachedPhoto != null)
                     GestureDetector(
                       onTap: () => setState(() => _attachedPhoto = null),
-                      child: const Text('Remove', style: TextStyle(fontSize: 11, color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Remove',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -452,7 +597,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: cardBorder),
-                    image: DecorationImage(image: FileImage(_attachedPhoto!), fit: BoxFit.cover),
+                    image: DecorationImage(
+                      image: FileImage(_attachedPhoto!),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 )
               else
@@ -462,11 +610,19 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => _pickPhoto(ImageSource.camera),
                         icon: const Icon(Icons.camera_alt_outlined, size: 15),
-                        label: const Text('Take Photo', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          'Take Photo',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: textMain,
                           side: const BorderSide(color: cardBorder),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                       ),
@@ -475,12 +631,23 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pickPhoto(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library_outlined, size: 15),
-                        label: const Text('Gallery', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                        icon: const Icon(
+                          Icons.photo_library_outlined,
+                          size: 15,
+                        ),
+                        label: const Text(
+                          'Gallery',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: textMain,
                           side: const BorderSide(color: cardBorder),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                       ),
@@ -492,7 +659,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
 
               // 7. Detention Pay Reimbursement Switch
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: cardBg,
                   borderRadius: BorderRadius.circular(10),
@@ -507,7 +677,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                         children: [
                           Text(
                             'Detention Billing Claim (>2 Hours)',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain),
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: textMain,
+                            ),
                           ),
                           Text(
                             'Auto-log arrival timestamp for customer detention compensation',
@@ -520,7 +694,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       value: _isDetentionClaim,
                       activeThumbColor: primaryColor,
                       activeTrackColor: primaryColor.withValues(alpha: 0.35),
-                      onChanged: (val) => setState(() => _isDetentionClaim = val),
+                      onChanged: (val) =>
+                          setState(() => _isDetentionClaim = val),
                     ),
                   ],
                 ),
@@ -537,9 +712,12 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEF4444),
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.8),
+                    disabledBackgroundColor: const Color(0xFFEF4444)
+                        .withValues(alpha: 0.8),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: _isSubmitting
                       ? const WaveProcessingIndicator(
@@ -557,7 +735,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                             SizedBox(width: 6),
                             Text(
                               'Submit Incident to Dispatch HQ',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
@@ -579,7 +760,9 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
-            color: isSelected ? color.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
+            color: isSelected
+                ? color.withValues(alpha: 0.12)
+                : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected ? color : cardBorder,

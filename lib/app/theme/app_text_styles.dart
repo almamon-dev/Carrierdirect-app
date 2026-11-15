@@ -1,63 +1,45 @@
 import 'package:flutter/material.dart';
-import 'app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
 
 class AppTextStyles {
   AppTextStyles._();
 
-  static const TextStyle h1 = TextStyle(
-    fontSize: 28,
-    fontWeight: FontWeight.w900,
+  // Page titles: 22–24px, weight 700
+  static TextStyle pageTitle = AppTypography.pageTitle;
+
+  // Section headings: 16–18px, weight 600
+  static TextStyle sectionHeading = AppTypography.sectionHeading;
+
+  // Card titles: 14–16px, weight 600
+  static TextStyle cardTitle = AppTypography.cardTitle;
+
+  // Body text: 14px, weight 400
+  static TextStyle bodyText = AppTypography.bodyText;
+
+  // Supporting metadata: 12px, weight 400
+  static TextStyle metadata = AppTypography.metadata;
+
+  // Buttons: 14px, weight 600
+  static TextStyle button = AppTypography.button;
+
+  // Backwards compatible aliases
+  static TextStyle h1 = GoogleFonts.inter(
+    fontSize: 26,
+    fontWeight: FontWeight.w800,
     color: AppColors.textPrimary,
     letterSpacing: -0.5,
   );
 
-  static const TextStyle h2 = TextStyle(
-    fontSize: 22,
-    fontWeight: FontWeight.bold,
-    color: AppColors.textPrimary,
-    letterSpacing: -0.3,
-  );
-
-  static const TextStyle h3 = TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle titleMedium = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle bodyLarge = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.normal,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle bodyMedium = TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.normal,
-    color: AppColors.textSecondary,
-  );
-
-  static const TextStyle bodySmall = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.normal,
-    color: AppColors.textMuted,
-  );
-
-  static const TextStyle label = TextStyle(
-    fontSize: 13,
+  static TextStyle h2 = AppTypography.pageTitle;
+  static TextStyle h3 = AppTypography.sectionHeading;
+  static TextStyle titleMedium = AppTypography.titleMedium;
+  static TextStyle bodyLarge = AppTypography.bodyLarge;
+  static TextStyle bodyMedium = AppTypography.bodyMedium;
+  static TextStyle bodySmall = AppTypography.metadata;
+  static TextStyle label = AppTypography.metadata.copyWith(
     fontWeight: FontWeight.w500,
-    color: AppColors.textSecondary,
-  );
-
-  static const TextStyle button = TextStyle(
-    fontSize: 13.5,
-    fontWeight: FontWeight.w600,
-    color: AppColors.white,
-    letterSpacing: 0.1,
   );
 }

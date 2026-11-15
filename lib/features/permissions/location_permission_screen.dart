@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/storage/local_storage.dart';
 import '../../services/location_service.dart';
+import '../../shared/utils/app_toast.dart';
 
 /// Screen 1: Allow Location Access (Intro Screen)
 /// Screen 2: Clean Bottom-Sheet Modal requesting location permission
@@ -48,7 +52,11 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
     Navigator.of(context).pushReplacementNamed(AppRoutes.locationSuccess);
   }
 
-  void _proceedToLogin() {
+  void _proceedToLogin() async {
+    if (!mounted) return;
+    try {
+      await LocalStorage().setBool(AppConstants.keyOnboardingCompleted, true);
+    } catch (_) {}
     if (!mounted) return;
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -59,10 +67,8 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.login,
-      (route) => false,
-    );
+    Navigator.of(context)
+        .pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
 
   void _handleEnableLocation() async {
@@ -119,196 +125,205 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Drag Handle Pill
-                  Container(
-                    width: 42,
-                    height: 4.5,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFCBD5E1),
-                      borderRadius: BorderRadius.circular(3),
+                  children: [
+                    // Drag Handle Pill
+                    Container(
+                      width: 42,
+                      height: 4.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                  // Folded Map with 3D Orange Pin & Radiating Accent Dashes
-                  SizedBox(
-                    width: 140,
-                    height: 120,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Radiating accent dashes (orange)
-                        const CustomPaint(
-                          size: Size(140, 120),
-                          painter: _RadiatingDashesPainter(
-                            color: Color(0xFFFF5722),
+                    // Folded Map with 3D Orange Pin & Radiating Accent Dashes
+                    SizedBox(
+                      width: 140,
+                      height: 120,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Radiating accent dashes (orange)
+                          const CustomPaint(
+                            size: Size(140, 120),
+                            painter: _RadiatingDashesPainter(
+                              color: Color(0xFFFF5722),
+                            ),
                           ),
-                        ),
 
-                        // Folded map image with orange pin
-                        Image.asset(
-                          'assets/images/folded_map_pin.png',
-                          width: 125,
-                          height: 110,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const Icon(
-                            Icons.location_on_rounded,
-                            size: 72,
-                            color: Color(0xFFFF5722),
+                          // Folded map image with orange pin
+                          Image.asset(
+                            'assets/images/folded_map_pin.png',
+                            width: 125,
+                            height: 110,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.location_on_rounded,
+                              size: 72,
+                              color: Color(0xFFFF5722),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-                  // Title: "Allow CarrierDirect to access your location?"
-                  RichText(
-                    textAlign: TextAlign.center,
-                    text: const TextSpan(
+                    // Title: "Allow CarrierDirect to access your location?"
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: const TextSpan(
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.3,
+                          height: 1.25,
+                        ),
+                        children: [
+                          TextSpan(text: 'Allow '),
+                          TextSpan(
+                            text: 'CarrierDirect',
+                            style: TextStyle(color: Color(0xFFFF5722)),
+                          ),
+                          TextSpan(text: ' to\naccess your location?'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Subtitle
+                    const Text(
+                      'We use your location to find nearby loads, provide turn-by-turn navigation, and track deliveries in real-time.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                        letterSpacing: -0.3,
-                        height: 1.25,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF64748B),
+                        height: 1.38,
                       ),
-                      children: [
-                        TextSpan(text: 'Allow '),
-                        TextSpan(
-                          text: 'CarrierDirect',
-                          style: TextStyle(color: Color(0xFFFF5722)),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Primary Button: "Allow While Using App" with rounded-[5px]
+                    Container(
+                      height: 52,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                          5.0,
+                        ), // rounded-[5px]
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF5722), Color(0xFFFF3D00)],
                         ),
-                        TextSpan(text: ' to\naccess your location?'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Subtitle
-                  const Text(
-                    'We use your location to find nearby loads, provide turn-by-turn navigation, and track deliveries in real-time.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF64748B),
-                      height: 1.38,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Primary Button: "Allow While Using App" with rounded-[5px]
-                  Container(
-                    height: 52,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5.0), // rounded-[5px]
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF5722), Color(0xFFFF3D00)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF5722)
+                                .withValues(alpha: 0.35),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: _isRequesting
-                            ? null
-                            : () async {
-                                setModalState(() => _isRequesting = true);
-                                setState(() => _isRequesting = true);
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _isRequesting
+                              ? null
+                              : () async {
+                                  setModalState(() => _isRequesting = true);
+                                  setState(() => _isRequesting = true);
 
-                                final granted =
-                                    await _locationService.requestPermission();
+                                  final granted = await _locationService
+                                      .requestPermission();
 
-                                if (!mounted) return;
-                                setModalState(() => _isRequesting = false);
-                                setState(() => _isRequesting = false);
+                                  if (!mounted) return;
+                                  setModalState(() => _isRequesting = false);
+                                  setState(() => _isRequesting = false);
 
-                                if (bottomSheetContext.mounted) {
-                                  Navigator.of(bottomSheetContext).pop();
-                                }
+                                  if (bottomSheetContext.mounted) {
+                                    Navigator.of(bottomSheetContext).pop();
+                                  }
 
-                                if (granted) {
-                                  _navigateToSuccess();
-                                } else {
-                                  _handlePermissionDenied();
-                                }
-                              },
-                        borderRadius: BorderRadius.circular(5.0), // rounded-[5px]
-                        splashColor: Colors.white24,
-                        child: Center(
-                          child: _isRequesting
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.2,
+                                  if (granted) {
+                                    _navigateToSuccess();
+                                  } else {
+                                    _handlePermissionDenied();
+                                  }
+                                },
+                          borderRadius: BorderRadius.circular(
+                            5.0,
+                          ), // rounded-[5px]
+                          splashColor: Colors.white24,
+                          child: Center(
+                            child: _isRequesting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Allow While Using App',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.1,
+                                    ),
                                   ),
-                                )
-                              : const Text(
-                                  'Allow While Using App',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.1,
-                                  ),
-                                ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
-                  // Secondary Button: "Not Now" with rounded-[5px]
-                  Container(
-                    height: 48,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(5.0), // rounded-[5px]
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.of(bottomSheetContext).pop();
-                          _proceedToLogin();
-                        },
-                        borderRadius: BorderRadius.circular(5.0), // rounded-[5px]
-                        child: const Center(
-                          child: Text(
-                            'Not Now',
-                            style: TextStyle(
-                              color: Color(0xFF64748B),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                    // Secondary Button: "Not Now" with rounded-[5px]
+                    Container(
+                      height: 48,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(
+                          5.0,
+                        ), // rounded-[5px]
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(bottomSheetContext).pop();
+                            _proceedToLogin();
+                          },
+                          borderRadius: BorderRadius.circular(
+                            5.0,
+                          ), // rounded-[5px]
+                          child: const Center(
+                            child: Text(
+                              'Not Now',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
+            );
+          },
+        );
+      },
+    );
+  }
 
   /// Feedback and retry handling when permission is denied
   void _handlePermissionDenied() async {
@@ -316,29 +331,19 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
     if (!mounted) return;
 
     if (permanentlyDenied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Location permission is permanently denied. Please enable it in Settings.',
-          ),
-          backgroundColor: const Color(0xFF0F172A),
-          action: SnackBarAction(
-            label: 'Settings',
-            textColor: const Color(0xFFFF5722),
-            onPressed: () => _locationService.openSettings(),
-          ),
-          duration: const Duration(seconds: 4),
-        ),
+      AppToast.warning(
+        context,
+        'Location permission is permanently denied. Please enable it in Settings.',
+        title: 'Location Access Needed',
+        actionLabel: 'Settings',
+        onAction: () => _locationService.openSettings(),
+        duration: const Duration(seconds: 4),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Location access is required to receive loads. Tap "Allow Location" to retry.',
-          ),
-          backgroundColor: Color(0xFF0F172A),
-          duration: Duration(seconds: 3),
-        ),
+      AppToast.warning(
+        context,
+        'Location access is required to receive loads. Tap "Enable Location" to retry.',
+        title: 'Location Required',
       );
     }
   }
@@ -349,8 +354,9 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
     final screenHeight = mediaQuery.size.height;
     // Responsive Hero banner taking ~38% of screen height
     final heroHeight = (screenHeight * 0.38).clamp(220.0, 340.0);
-    final bottomInset =
-        mediaQuery.padding.bottom > 0 ? mediaQuery.padding.bottom : 8.0;
+    final bottomInset = mediaQuery.padding.bottom > 0
+        ? mediaQuery.padding.bottom
+        : 8.0;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -457,7 +463,8 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  const Color(0xFFFF5722).withValues(alpha: 0.22),
+                                  const Color(0xFFFF5722)
+                                      .withValues(alpha: 0.22),
                                   Colors.transparent,
                                 ],
                               ),
@@ -483,12 +490,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                   SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        18,
-                        46,
-                        18,
-                        bottomInset + 6,
-                      ),
+                      padding: EdgeInsets.fromLTRB(18, 46, 18, bottomInset + 6),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -506,9 +508,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                                 TextSpan(text: 'Allow '),
                                 TextSpan(
                                   text: 'Location',
-                                  style: TextStyle(
-                                    color: Color(0xFFFF4500),
-                                  ),
+                                  style: TextStyle(color: Color(0xFFFF4500)),
                                 ),
                                 TextSpan(text: ' Access'),
                               ],
@@ -537,8 +537,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                               size: 22,
                             ),
                             title: 'Find nearby loads',
-                            subtitle:
-                                'Discover available shipments near your current route.',
+                            subtitle: 'Discover available shipments near your current route.',
                           ),
 
                           // 2. Accurate navigation (with rounded-[5px])
@@ -549,8 +548,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                               size: 21,
                             ),
                             title: 'Accurate navigation',
-                            subtitle:
-                                'Optimized truck routes and real-time live traffic guidance.',
+                            subtitle: 'Optimized truck routes and real-time live traffic guidance.',
                           ),
 
                           // 3. Live delivery tracking (with rounded-[5px])
@@ -561,8 +559,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                               size: 22,
                             ),
                             title: 'Live delivery tracking',
-                            subtitle:
-                                'Automated real-time trip status updates for dispatch.',
+                            subtitle: 'Automated real-time trip status updates for dispatch.',
                           ),
 
                           // 4. Seamless facility check-in (with rounded-[5px])
@@ -581,8 +578,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                               ),
                             ),
                             title: 'Seamless facility check-in',
-                            subtitle:
-                                'Automatic geofence arrival detection at pickup & drop-off.',
+                            subtitle: 'Automatic geofence arrival detection at pickup & drop-off.',
                           ),
 
                           const SizedBox(height: 18),
@@ -649,7 +645,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9.5),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(5.0), // rounded-[5px]
+        borderRadius: BorderRadius.circular(4.0), // rounded-[4px]
         border: Border.all(color: const Color(0xFFF1F5F9), width: 1.1),
         boxShadow: [
           BoxShadow(
@@ -725,10 +721,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
         gradient: const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            Color(0xFFFF5722),
-            Color(0xFFFF3D00),
-          ],
+          colors: [Color(0xFFFF5722), Color(0xFFFF3D00)],
         ),
         boxShadow: [
           BoxShadow(

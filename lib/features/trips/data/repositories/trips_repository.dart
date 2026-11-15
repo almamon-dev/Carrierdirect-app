@@ -9,7 +9,7 @@ class TripsRepository implements ITripsRepository {
   final ITripsRemoteDataSource _remoteDataSource;
 
   TripsRepository({ITripsRemoteDataSource? remoteDataSource})
-      : _remoteDataSource = remoteDataSource ?? TripsRemoteDataSource();
+    : _remoteDataSource = remoteDataSource ?? TripsRemoteDataSource();
 
   @override
   Future<List<TripModel>> getTrips() async {

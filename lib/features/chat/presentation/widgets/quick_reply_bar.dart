@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../data/models/chat_channel_model.dart';
 
 class QuickReplyBar extends StatelessWidget {

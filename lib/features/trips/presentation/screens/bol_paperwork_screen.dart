@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 
@@ -31,7 +32,11 @@ class BolPaperworkScreen extends StatelessWidget {
         scrolledUnderElevation: 1,
         shadowColor: cardBorder,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textMain),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 18,
+            color: textMain,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Column(
@@ -39,7 +44,11 @@ class BolPaperworkScreen extends StatelessWidget {
           children: [
             Text(
               'Digital Bill of Lading (BOL)',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textMain),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: textMain,
+              ),
             ),
             Text(
               'Official Electronic Freight Manifest',
@@ -50,7 +59,8 @@ class BolPaperworkScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.share_outlined, color: textMain, size: 20),
-            onPressed: () => AppToast.success(context, 'BOL Link copied to clipboard'),
+            onPressed: () =>
+                AppToast.success(context, 'BOL Link copied to clipboard'),
           ),
         ],
       ),
@@ -107,15 +117,26 @@ class BolPaperworkScreen extends StatelessWidget {
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                            color: const Color(0xFF10B981)
+                                .withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                            border: Border.all(
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.3),
+                            ),
                           ),
                           child: const Row(
                             children: [
-                              Icon(Icons.verified_rounded, size: 14, color: Color(0xFF059669)),
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 14,
+                                color: Color(0xFF059669),
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'Signed & Valid',
@@ -133,8 +154,14 @@ class BolPaperworkScreen extends StatelessWidget {
                     const Divider(color: cardBorder, height: 24),
                     _buildRow('Load Reference ID:', shipmentId),
                     _buildRow('Carrier Name:', 'Apex Transport Logistics Inc.'),
-                    _buildRow('Driver / CDL-A:', 'Mike Icorse (CDL #FL-889421)'),
-                    _buildRow('Trailer / Tractor:', 'Semi-Truck #TR-402 (Reefer 53ft)'),
+                    _buildRow(
+                      'Driver / CDL-A:',
+                      'Mike Icorse (CDL #FL-889421)',
+                    ),
+                    _buildRow(
+                      'Trailer / Tractor:',
+                      'Semi-Truck #TR-402 (Reefer 53ft)',
+                    ),
                     _buildRow('Security Seal #:', 'SEAL-88902-VERIFIED'),
                   ],
                 ),
@@ -155,7 +182,11 @@ class BolPaperworkScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'Origin & Destination Route',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textMain),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textMain,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -165,19 +196,40 @@ class BolPaperworkScreen extends StatelessWidget {
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEA580C).withValues(alpha: 0.12),
+                            color: const Color(0xFFEA580C)
+                                .withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.warehouse_rounded, size: 16, color: Color(0xFFEA580C)),
+                          child: const Icon(
+                            Icons.warehouse_rounded,
+                            size: 16,
+                            color: Color(0xFFEA580C),
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Shipper (Pickup)', style: TextStyle(fontSize: 11, color: textSub)),
-                              Text(originTitle, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: textMain)),
-                              const Text('Bay 4, Port Logistics Park • Loaded 09:05 AM', style: TextStyle(fontSize: 11.5, color: textSub)),
+                              const Text(
+                                'Shipper (Pickup)',
+                                style: TextStyle(fontSize: 11, color: textSub),
+                              ),
+                              Text(
+                                originTitle,
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: textMain,
+                                ),
+                              ),
+                              const Text(
+                                'Bay 4, Port Logistics Park • Loaded 09:05 AM',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: textSub,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -185,7 +237,13 @@ class BolPaperworkScreen extends StatelessWidget {
                     ),
                     const Padding(
                       padding: EdgeInsets.only(left: 14, top: 4, bottom: 4),
-                      child: SizedBox(height: 14, child: VerticalDivider(color: cardBorder, thickness: 1.5)),
+                      child: SizedBox(
+                        height: 14,
+                        child: VerticalDivider(
+                          color: cardBorder,
+                          thickness: 1.5,
+                        ),
+                      ),
                     ),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,19 +252,40 @@ class BolPaperworkScreen extends StatelessWidget {
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                            color: const Color(0xFF0284C7)
+                                .withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF0284C7)),
+                          child: const Icon(
+                            Icons.storefront_rounded,
+                            size: 16,
+                            color: Color(0xFF0284C7),
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Consignee (Delivery)', style: TextStyle(fontSize: 11, color: textSub)),
-                              Text(destTitle, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: textMain)),
-                              const Text('Dock 12, 742 Evergreen Terrace • ETA 04:30 PM', style: TextStyle(fontSize: 11.5, color: textSub)),
+                              const Text(
+                                'Consignee (Delivery)',
+                                style: TextStyle(fontSize: 11, color: textSub),
+                              ),
+                              Text(
+                                destTitle,
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: textMain,
+                                ),
+                              ),
+                              const Text(
+                                'Dock 12, 742 Evergreen Terrace • ETA 04:30 PM',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: textSub,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -231,13 +310,30 @@ class BolPaperworkScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'Cargo & Item Manifest',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textMain),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textMain,
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    _buildManifestRow('Item Description', 'Qty', 'Weight', isHeader: true),
+                    _buildManifestRow(
+                      'Item Description',
+                      'Qty',
+                      'Weight',
+                      isHeader: true,
+                    ),
                     const Divider(color: cardBorder, height: 12),
-                    _buildManifestRow('Refrigerated Dairy & Milk Crates', '14 Pallets', '12,400 lbs'),
-                    _buildManifestRow('Frozen Bakery Products', '6 Pallets', '6,000 lbs'),
+                    _buildManifestRow(
+                      'Refrigerated Dairy & Milk Crates',
+                      '14 Pallets',
+                      '12,400 lbs',
+                    ),
+                    _buildManifestRow(
+                      'Frozen Bakery Products',
+                      '6 Pallets',
+                      '6,000 lbs',
+                    ),
                     const Divider(color: cardBorder, height: 12),
                     _buildRow('Total Cargo Weight:', '18,400 lbs (9.2 Tons)'),
                     _buildRow('Reefer Temperature:', '-18°C Controlled'),
@@ -261,7 +357,11 @@ class BolPaperworkScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'Electronic Signatures & Stamps',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textMain),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textMain,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -277,10 +377,30 @@ class BolPaperworkScreen extends StatelessWidget {
                             child: const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Shipper Agent:', style: TextStyle(fontSize: 10.5, color: textSub)),
+                                Text(
+                                  'Shipper Agent:',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: textSub,
+                                  ),
+                                ),
                                 SizedBox(height: 2),
-                                Text('David Miller', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain)),
-                                Text('✓ Signed 09:05 AM', style: TextStyle(fontSize: 10, color: Color(0xFF059669), fontWeight: FontWeight.w600)),
+                                Text(
+                                  'David Miller',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: textMain,
+                                  ),
+                                ),
+                                Text(
+                                  '✓ Signed 09:05 AM',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF059669),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -297,10 +417,30 @@ class BolPaperworkScreen extends StatelessWidget {
                             child: const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Driver Signature:', style: TextStyle(fontSize: 10.5, color: textSub)),
+                                Text(
+                                  'Driver Signature:',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: textSub,
+                                  ),
+                                ),
                                 SizedBox(height: 2),
-                                Text('Mike Icorse', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textMain)),
-                                Text('✓ Verified Digital POD', style: TextStyle(fontSize: 10, color: Color(0xFF059669), fontWeight: FontWeight.w600)),
+                                Text(
+                                  'Mike Icorse',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: textMain,
+                                  ),
+                                ),
+                                Text(
+                                  '✓ Verified Digital POD',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF059669),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -318,15 +458,23 @@ class BolPaperworkScreen extends StatelessWidget {
                 height: 38,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    AppToast.success(context, 'BOL Document PDF downloaded to device');
+                    AppToast.success(
+                      context,
+                      'BOL Document PDF downloaded to device',
+                    );
                   },
                   icon: const Icon(Icons.download_rounded, size: 16),
-                  label: const Text('Download Official BOL (PDF)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  label: const Text(
+                    'Download Official BOL (PDF)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -348,7 +496,11 @@ class BolPaperworkScreen extends StatelessWidget {
           Flexible(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textMain),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: textMain,
+              ),
               textAlign: TextAlign.end,
             ),
           ),
@@ -357,7 +509,12 @@ class BolPaperworkScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildManifestRow(String desc, String qty, String weight, {bool isHeader = false}) {
+  Widget _buildManifestRow(
+    String desc,
+    String qty,
+    String weight, {
+    bool isHeader = false,
+  }) {
     final style = TextStyle(
       fontSize: isHeader ? 11.5 : 12.5,
       fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
@@ -369,8 +526,14 @@ class BolPaperworkScreen extends StatelessWidget {
       child: Row(
         children: [
           Expanded(flex: 3, child: Text(desc, style: style)),
-          Expanded(flex: 2, child: Text(qty, style: style, textAlign: TextAlign.center)),
-          Expanded(flex: 2, child: Text(weight, style: style, textAlign: TextAlign.end)),
+          Expanded(
+            flex: 2,
+            child: Text(qty, style: style, textAlign: TextAlign.center),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(weight, style: style, textAlign: TextAlign.end),
+          ),
         ],
       ),
     );

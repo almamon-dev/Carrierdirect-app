@@ -1,48 +1,92 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/secure_storage.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../shared/utils/app_toast.dart';
-import '../../../chat/data/models/chat_channel_model.dart';
-import '../../../chat/presentation/screens/chat_screen.dart';
-import '../../../chat/presentation/widgets/chat_channels_modal.dart';
-import '../widgets/in_app_google_map_view.dart';
-import 'live_tracking_screen.dart';
+import '../../../../shared/utils/map_launcher_helper.dart';
+import '../../../../services/google_navigation_service.dart';
+import '../../../../services/order_gps_tracker_service.dart';
+import '../widgets/accept_handover_modal.dart';
+import '../widgets/handover_modal.dart';
+import '../widgets/load_delivered_modal.dart';
+import '../widgets/shipment_bottom_action_bar.dart';
+import '../widgets/map_skeleton_placeholder.dart';
+import '../widgets/shipment_header_bar.dart';
+import '../widgets/shipment_overview_tab.dart';
+import '../widgets/shipment_route_tab.dart';
 import 'trips_screen.dart';
 
 class ShipmentDetailsScreen extends StatefulWidget {
   final ShipmentItem shipment;
 
-  const ShipmentDetailsScreen({
-    super.key,
-    required this.shipment,
-  });
+  const ShipmentDetailsScreen({super.key, required this.shipment});
 
   @override
   State<ShipmentDetailsScreen> createState() => _ShipmentDetailsScreenState();
 }
 
-class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen> with SingleTickerProviderStateMixin {
-  bool _isLoading = true;
+class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen>
+    with SingleTickerProviderStateMixin {
+  late ShipmentItem _shipment;
+  bool _isLoading = false;
+  bool _isUpdatingStatus = false;
+  int _selectedTabIndex = 0; // 0: Overview, 1: Route
+
   AnimationController? _shimmerController;
   Animation<double>? _shimmerAnimation;
 
-  static const Color primaryOrange = Color(0xFFFF5722);
-  static const Color successGreen = Color(0xFF059669);
-  static const Color darkSlate = Color(0xFF0F172A);
-  static const Color textMuted = Color(0xFF64748B);
-  static const Color cardBorderColor = Color(0xFFE2E8F0);
-  static const Color pageBg = Color(0xFFF8FAFC);
+  // Dynamic API state
+  final List<Map<String, dynamic>> _activityLog = [];
+  List<LatLng> _dynamicRoutePoints = [];
+  String? _podPhotoUrl;
+  String? _signatureUrl;
+  String? _receiverName;
+  String? _podStatus;
+  String _estimatedDuration = '';
+  String? _cargoDimensions;
+  String? _specialInstructions;
+
+  late final PageController _pageController;
+
+  static const Color primaryOrange = AppColors.primary;
+  static const Color successGreen = AppColors.success;
+  static const Color darkSlate = AppColors.textPrimary;
+  static const Color textMuted = AppColors.textSecondary;
+  static const Color pageBg = AppColors.background;
+
+  String? _cachedToken;
+
+  Future<String?> _getAuthToken() async {
+    if (_cachedToken != null && _cachedToken!.isNotEmpty) return _cachedToken;
+    _cachedToken = await SecureStorage().read(AppConstants.keyAuthToken);
+    return _cachedToken;
+  }
 
   @override
   void initState() {
     super.initState();
+    _shipment = widget.shipment;
+    // If shipment data already present from trips/dashboard, immediately show content without blocking
+    final hasExistingData =
+        _shipment.id.isNotEmpty &&
+        (_shipment.originTitle.isNotEmpty || _shipment.destTitle.isNotEmpty);
+    _isLoading = !hasExistingData;
+    _pageController = PageController(initialPage: _selectedTabIndex);
+    _initDynamicData();
     _initShimmer();
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    });
+    _fetchShipmentDetails();
+    if (_shipment.status == ShipmentFilter.inProgress) {
+      OrderGpsTrackerService().startTracking(_shipment);
+    }
   }
 
   void _initShimmer() {
@@ -50,375 +94,410 @@ class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen> with Sing
       _shimmerController = AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 1400),
-      )..repeat();
-      _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
-        CurvedAnimation(parent: _shimmerController!, curve: Curves.easeInOutSine),
       );
+      _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+        CurvedAnimation(
+          parent: _shimmerController!,
+          curve: Curves.easeInOutSine,
+        ),
+      );
+      if (_isLoading) {
+        _shimmerController!.repeat();
+      }
     }
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _shimmerController?.dispose();
     super.dispose();
   }
 
-  Future<void> _simulateRefresh() async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 750));
-    if (mounted) {
-      setState(() => _isLoading = false);
+  void _initDynamicData() {
+    if (_shipment.originLat != 0.0 && _shipment.destLat != 0.0) {
+      _dynamicRoutePoints = [
+        LatLng(_shipment.originLat, _shipment.originLng),
+        LatLng(_shipment.destLat, _shipment.destLng),
+      ];
     }
-  }
-
-  Widget _buildShimmerBox({
-    double? width,
-    required double height,
-    BorderRadius? borderRadius,
-  }) {
-    _initShimmer();
-    final anim = _shimmerAnimation;
-    if (anim == null) {
-      return Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE2E8F0),
-          borderRadius: borderRadius ?? BorderRadius.circular(6.0),
-        ),
+    if (_shipment.estimatedDuration.isNotEmpty) {
+      _estimatedDuration = Formatters.formatCompactDuration(
+        _shipment.estimatedDuration,
       );
     }
-    return AnimatedBuilder(
-      animation: anim,
-      builder: (context, child) {
-        final val = anim.value;
-        return Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE2E8F0),
-            borderRadius: borderRadius ?? BorderRadius.circular(6.0),
-            gradient: LinearGradient(
-              begin: Alignment(val - 1.0, 0),
-              end: Alignment(val + 1.0, 0),
-              colors: const [
-                Color(0xFFE2E8F0),
-                Color(0xFFF8FAFC),
-                Color(0xFFE2E8F0),
-              ],
-              stops: const [0.1, 0.5, 0.9],
-            ),
-          ),
+    // Defer the heavy road polyline network request so Overview tab opens instantly with zero frame drop
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) _fetchRealRoadRoute();
+    });
+  }
+
+  Future<void> _fetchRealRoadRoute() async {
+    try {
+      final originQuery =
+          (_shipment.originAddress.isNotEmpty && _shipment.originAddress != '—')
+          ? _shipment.originAddress
+          : _shipment.originTitle;
+      final destQuery =
+          (_shipment.destAddress.isNotEmpty && _shipment.destAddress != '—')
+          ? _shipment.destAddress
+          : _shipment.destTitle;
+
+      final res = await GoogleNavigationService().fetchRouteByAddressOrCoords(
+        originAddress: originQuery,
+        originCoords: (_shipment.originLat != 0.0 && _shipment.originLng != 0.0)
+            ? LatLng(_shipment.originLat, _shipment.originLng)
+            : null,
+        destinationAddress: destQuery,
+        destinationCoords:
+            (_shipment.destLat != 0.0 && _shipment.destLng != 0.0)
+            ? LatLng(_shipment.destLat, _shipment.destLng)
+            : null,
+        destinationTitle: _shipment.destTitle,
+      );
+      if (mounted && res != null) {
+        setState(() {
+          if (res.polylinePoints.isNotEmpty) {
+            _dynamicRoutePoints = res.polylinePoints;
+          }
+          final newDist = _shipment.distanceKm > 0
+              ? _shipment.distanceKm
+              : ((res.totalDistanceKm * 10).round() / 10.0);
+          final newOLat = _shipment.originLat != 0.0
+              ? _shipment.originLat
+              : (res.resolvedOrigin?.latitude ?? 0.0);
+          final newOLng = _shipment.originLng != 0.0
+              ? _shipment.originLng
+              : (res.resolvedOrigin?.longitude ?? 0.0);
+          final newDLat = _shipment.destLat != 0.0
+              ? _shipment.destLat
+              : (res.resolvedDestination?.latitude ?? 0.0);
+          final newDLng = _shipment.destLng != 0.0
+              ? _shipment.destLng
+              : (res.resolvedDestination?.longitude ?? 0.0);
+          if (res.totalDurationText.isNotEmpty) {
+            _estimatedDuration = Formatters.formatCompactDuration(
+              res.totalDurationText,
+            );
+          }
+          _shipment = _shipment.copyWith(
+            distanceKm: newDist,
+            originLat: newOLat,
+            originLng: newOLng,
+            destLat: newDLat,
+            destLng: newDLng,
+            estimatedDuration: _estimatedDuration,
+          );
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchShipmentDetails() async {
+    final rawDbId = _shipment.dbId.trim();
+    final cleanOrderNum = _shipment.id.replaceAll('#', '').trim();
+    final shipmentId = rawDbId.isNotEmpty ? rawDbId : cleanOrderNum;
+
+    try {
+      final token = await _getAuthToken();
+
+      if (token != null && token.isNotEmpty) {
+        final endpoint = '${ApiConstants.baseUrl}/driver/shipments/$shipmentId';
+        final response = await http
+            .get(
+              Uri.parse(endpoint),
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'ngrok-skip-browser-warning': 'true',
+                'Authorization': 'Bearer $token',
+              },
+            )
+            .timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 200) {
+          final dynamic body = jsonDecode(response.body);
+          if (body is Map<String, dynamic> &&
+              body['data'] is Map<String, dynamic>) {
+            _parseAndApplyApiData(body['data'] as Map<String, dynamic>);
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _shimmerController?.stop();
+    }
+  }
+
+  void _parseAndApplyApiData(Map<String, dynamic> data) {
+    if (!mounted) return;
+    try {
+      Map<String, dynamic> safeMap(dynamic val) {
+        if (val is Map<String, dynamic>) return val;
+        if (val is Map) return Map<String, dynamic>.from(val);
+        return <String, dynamic>{};
+      }
+
+      final parsed = ShipmentItem.fromJson(data);
+      final cargo = safeMap(data['cargo']);
+      final route = safeMap(data['route']);
+      final tracking = safeMap(data['tracking']);
+
+      final List<Map<String, dynamic>> newActivities = [];
+      final dynamic rawActivities =
+          data['timeline'] ??
+          data['activities'] ??
+          data['status_history'] ??
+          tracking['history'] ??
+          data['history'];
+      if (rawActivities is List) {
+        for (final item in rawActivities) {
+          if (item is Map) {
+            newActivities.add(Map<String, dynamic>.from(item));
+          }
+        }
+      }
+
+      setState(() {
+        _shipment = parsed;
+        _cargoDimensions = cargo['dimensions']?.toString();
+        _specialInstructions = cargo['special_instructions']?.toString();
+        _estimatedDuration = Formatters.formatCompactDuration(
+          route['estimated_duration']?.toString() ?? '',
         );
-      },
-    );
+
+        _podPhotoUrl =
+            tracking['proof_of_delivery']?.toString() ??
+            data['proof_of_delivery']?.toString() ??
+            data['proof']?.toString();
+        _signatureUrl =
+            tracking['signature']?.toString() ?? data['signature']?.toString();
+        _receiverName =
+            tracking['receiver_name']?.toString() ??
+            data['receiver_name']?.toString();
+        _podStatus =
+            tracking['pod_status']?.toString() ??
+            data['pod_status']?.toString();
+
+        _activityLog.clear();
+        _activityLog.addAll(newActivities);
+        _isLoading = false;
+      });
+      _shimmerController?.stop();
+
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) _fetchRealRoadRoute();
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _shimmerController?.stop();
+      }
+    }
   }
 
-  Widget _buildSkeletonCard({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: child,
-    );
+  Future<void> _simulateRefresh() async {
+    await _fetchShipmentDetails();
   }
-
-  Widget _buildSkeletonBody() {
-    return ListView(
-      key: const ValueKey('skeleton_loader'),
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
-      children: [
-        // Skeleton Card 1: Route & Map
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: cardBorderColor),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header line
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                child: Row(
-                  children: [
-                    _buildShimmerBox(width: 10, height: 10, borderRadius: BorderRadius.circular(5)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildShimmerBox(width: 170, height: 14),
-                          const SizedBox(height: 6),
-                          _buildShimmerBox(width: 95, height: 10),
-                        ],
-                      ),
-                    ),
-                    _buildShimmerBox(width: 88, height: 26, borderRadius: BorderRadius.circular(6)),
-                  ],
-                ),
-              ),
-
-              // Best route active banner skeleton
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: _buildShimmerBox(width: double.infinity, height: 30, borderRadius: BorderRadius.circular(4)),
-              ),
-
-              // Google Map skeleton box
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: _buildShimmerBox(width: double.infinity, height: 180, borderRadius: BorderRadius.circular(8)),
-              ),
-
-              // 4 Milestones Stepper skeleton
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(4, (index) {
-                    return Column(
-                      children: [
-                        _buildShimmerBox(width: 20, height: 20, borderRadius: BorderRadius.circular(10)),
-                        const SizedBox(height: 6),
-                        _buildShimmerBox(width: 50, height: 10),
-                        const SizedBox(height: 4),
-                        _buildShimmerBox(width: 36, height: 8),
-                      ],
-                    );
-                  }),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Skeleton Card 2: Current Status
-        _buildSkeletonCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildShimmerBox(width: 120, height: 14),
-                  _buildShimmerBox(width: 80, height: 22, borderRadius: BorderRadius.circular(4)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildShimmerBox(width: double.infinity, height: 12),
-              const SizedBox(height: 6),
-              _buildShimmerBox(width: 180, height: 12),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Skeleton Card 3: Pickup & Delivery Details
-        _buildSkeletonCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildShimmerBox(width: 140, height: 14),
-              const SizedBox(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildShimmerBox(width: 14, height: 14, borderRadius: BorderRadius.circular(7)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildShimmerBox(width: 130, height: 12),
-                        const SizedBox(height: 6),
-                        _buildShimmerBox(width: double.infinity, height: 10),
-                        const SizedBox(height: 4),
-                        _buildShimmerBox(width: 100, height: 10),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildShimmerBox(width: 14, height: 14, borderRadius: BorderRadius.circular(7)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildShimmerBox(width: 130, height: 12),
-                        const SizedBox(height: 6),
-                        _buildShimmerBox(width: double.infinity, height: 10),
-                        const SizedBox(height: 4),
-                        _buildShimmerBox(width: 100, height: 10),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Skeleton Card 4: Cargo & Equipment
-        _buildSkeletonCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildShimmerBox(width: 140, height: 14),
-              const SizedBox(height: 14),
-              Row(
-                children: List.generate(3, (i) {
-                  return Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildShimmerBox(width: 45, height: 10),
-                        const SizedBox(height: 6),
-                        _buildShimmerBox(width: 65, height: 12),
-                      ],
-                    ),
-                  );
-                }),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Skeleton Card 5: Proof of Delivery (POD)
-        _buildSkeletonCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildShimmerBox(width: 150, height: 14),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _buildShimmerBox(width: 54, height: 54, borderRadius: BorderRadius.circular(6)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildShimmerBox(width: 110, height: 12),
-                        const SizedBox(height: 6),
-                        _buildShimmerBox(width: 160, height: 10),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-
-  // Stepper milestones
-  final List<Map<String, String>> _stepperSteps = const [
-    {'title': 'Assigned', 'time': 'Oct 17, 08:41'},
-    {'title': 'Pickup', 'time': 'Oct 17, 09:45'},
-    {'title': 'In Transit', 'time': 'Oct 17, 08:45'},
-    {'title': 'Completed', 'time': 'Oct 17, 09:51'},
-  ];
-
-  // Route points: Dhaka Airport to Gazipur strictly adhering to Dhaka-Mymensingh Hwy (N3)
-  final List<LatLng> _routePoints = const [
-    LatLng(23.8510, 90.4070), // Dhaka Airport Cargo Terminal
-    LatLng(23.8540, 90.4040), // Airport road connector
-    LatLng(23.8585, 90.4018), // Kawla roundabout
-    LatLng(23.8645, 90.3999), // Jasimuddin Avenue (Uttara Sec 1/3)
-    LatLng(23.8717, 90.4004), // Rajlakshmi / Sector 3-4
-    LatLng(23.8760, 90.4006), // Azampur / Sector 7
-    LatLng(23.8805, 90.4009), // House Building / Sector 9
-    LatLng(23.8870, 90.4010), // Sector 10 Crossing
-    LatLng(23.8925, 90.4019), // Abdullahpur
-    LatLng(23.8970, 90.3989), // Tongi Bridge (River Turag)
-    LatLng(23.9030, 90.3990), // Tongi Bazar
-    LatLng(23.9090, 90.3995), // Station Road Tongi
-    LatLng(23.9160, 90.4015), // Mill Gate / Gazipura
-    LatLng(23.9248, 90.4042), // Cherag Ali Market
-    LatLng(23.9325, 90.4078), // College Gate, Tongi
-    LatLng(23.9405, 90.4110), // Hossain Market
-    LatLng(23.9550, 90.4180), // Board Bazar (IUT)
-    LatLng(23.9680, 90.4215), // Bangladesh Open University
-    LatLng(23.9820, 90.4240), // Taragach, Gazipur
-    LatLng(23.9910, 90.4250), // Chandana Chowrasta South Approach
-    LatLng(23.9980, 90.4260), // Chandana Chowrasta, Gazipur
-  ];
 
   void _copyLoadId() {
-    Clipboard.setData(ClipboardData(text: widget.shipment.id));
-    AppToast.success(context, 'Load ID copied: ${widget.shipment.id}', icon: Icons.content_copy_rounded);
+    Clipboard.setData(ClipboardData(text: _shipment.id));
+    AppToast.success(context, 'Load ID #${_shipment.id} copied to clipboard!');
   }
 
   Future<void> _openExternalGoogleMaps() async {
-    final origin = '${widget.shipment.originLat},${widget.shipment.originLng}';
-    final destination = '${widget.shipment.destLat},${widget.shipment.destLng}';
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&travelmode=driving',
+    OrderGpsTrackerService().startTracking(_shipment);
+
+    final bool isToDelivery =
+        _shipment.status == ShipmentFilter.inProgress ||
+        _shipment.status == ShipmentFilter.completed;
+    final targetLat = isToDelivery ? _shipment.destLat : _shipment.originLat;
+    final targetLng = isToDelivery ? _shipment.destLng : _shipment.originLng;
+    final targetAddr = isToDelivery
+        ? _shipment.destAddress
+        : _shipment.originAddress;
+    final targetTitle = isToDelivery
+        ? _shipment.destTitle
+        : _shipment.originTitle;
+
+    await MapLauncherHelper.openGoogleMaps(
+      context,
+      destinationAddress: targetAddr.isNotEmpty && targetAddr != '—'
+          ? targetAddr
+          : targetTitle,
+      latitude: targetLat != 0.0 ? targetLat : null,
+      longitude: targetLng != 0.0 ? targetLng : null,
+      destinationTitle: targetTitle,
     );
+  }
+
+  void _showLoadDeliveredModal() {
+    LoadDeliveredModal.show(
+      context,
+      onPodUploaded: (filePath, fileName) {},
+      onPodFullSubmitted:
+          ({
+            required String receiverName,
+            required String signatureData,
+            String? pdfPath,
+            String? pdfName,
+            String? notes,
+          }) {
+            if (mounted) {
+              final nowIso = DateTime.now().toIso8601String();
+              setState(() {
+                _receiverName = receiverName;
+                _signatureUrl = signatureData;
+                _podPhotoUrl = pdfPath ?? 'signature_captured';
+                _podStatus = 'pending';
+                _shipment = _shipment.copyWith(
+                  status: ShipmentFilter.completed,
+                  statusLabel: 'Delivered',
+                  rawStatus: 'delivered',
+                  signedBy: receiverName,
+                  podDate: nowIso,
+                );
+              });
+              OrderGpsTrackerService().stopTracking();
+              _submitPodToBackend(
+                receiverName: receiverName,
+                signatureData: signatureData,
+                pdfPath: pdfPath,
+                notes: notes,
+              );
+            }
+          },
+    );
+  }
+
+  Future<void> _submitPodToBackend({
+    required String receiverName,
+    required String signatureData,
+    String? pdfPath,
+    String? notes,
+  }) async {
+    final rawDbId = _shipment.dbId.trim();
+    final cleanOrderNum = _shipment.id.replaceAll('#', '').trim();
+    final shipmentId = rawDbId.isNotEmpty ? rawDbId : cleanOrderNum;
     try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) AppToast.info(context, 'Opening map location...');
+      final token = await _getAuthToken();
+      if (token == null || token.isEmpty) return;
+
+      final endpoint =
+          '${ApiConstants.baseUrl}/driver/shipments/$shipmentId/status';
+      final Map<String, dynamic> payload = {
+        'status': 'delivered',
+        'receiver_name': receiverName,
+        'signature': signatureData,
+        'notes': notes ?? 'Delivered with POD sign-off',
+      };
+      if (pdfPath != null && pdfPath.isNotEmpty) {
+        try {
+          final file = File(pdfPath);
+          if (await file.exists()) {
+            final bytes = await file.readAsBytes();
+            final ext = pdfPath.split('.').last.toLowerCase();
+            final mime = (ext == 'pdf')
+                ? 'application/pdf'
+                : (ext == 'png' ? 'image/png' : 'image/jpeg');
+            payload['proof_of_delivery'] =
+                'data:$mime;base64,${base64Encode(bytes)}';
+          } else {
+            payload['proof_of_delivery'] = pdfPath;
+          }
+        } catch (_) {
+          payload['proof_of_delivery'] = pdfPath;
+        }
       }
-    } catch (_) {
-      if (mounted) AppToast.info(context, 'Could not open map app.');
+      final res = await http.post(
+        Uri.parse(endpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final dynamic body = jsonDecode(res.body);
+        if (body is Map<String, dynamic> &&
+            body['data'] is Map<String, dynamic>) {
+          _parseAndApplyApiData(body['data'] as Map<String, dynamic>);
+        }
+        if (mounted) {
+          AppToast.success(context, 'Delivery marked & Proof of Delivery submitted');
+        }
+      } else {
+        if (mounted) {
+          String errMsg = 'Failed to submit POD (${res.statusCode})';
+          try {
+            final errBody = jsonDecode(res.body);
+            if (errBody is Map && errBody['message'] != null) {
+              errMsg = errBody['message'].toString();
+            }
+          } catch (_) {}
+          AppToast.error(context, errMsg);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.error(context, 'Network error submitting POD');
+      }
     }
   }
 
   void _viewPodPhoto() {
+    final photoUrl = (_podPhotoUrl != null && _podPhotoUrl!.isNotEmpty)
+        ? _podPhotoUrl!
+        : ((_signatureUrl != null && _signatureUrl!.isNotEmpty)
+              ? _signatureUrl!
+              : null);
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.white,
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.verified_rounded, color: successGreen, size: 20),
+                      Icon(
+                        Icons.verified_rounded,
+                        color: successGreen,
+                        size: 20,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'Proof of Delivery (POD)',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: darkSlate),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: darkSlate,
+                        ),
                       ),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 22, color: textMuted),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 22,
+                      color: textMuted,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () => Navigator.pop(ctx),
@@ -426,213 +505,52 @@ class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen> with Sing
                 ],
               ),
               const SizedBox(height: 12),
-
-              // Real Interactive Photo Preview (Pinch to Zoom enabled)
               ClipRRect(
                 borderRadius: BorderRadius.circular(8.0),
                 child: Container(
-                  height: 220,
+                  height: 240,
                   width: double.infinity,
                   color: const Color(0xFF0F172A),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Photo with Zoom & Pan
-                      InteractiveViewer(
-                        minScale: 1.0,
-                        maxScale: 3.5,
-                        child: Image.network(
-                          'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80',
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
-                              color: const Color(0xFF1E293B),
-                              child: const Center(
-                                child: CircularProgressIndicator(color: primaryOrange, strokeWidth: 2),
-                              ),
-                            );
-                          },
-                          errorBuilder: (_, _, _) => Container(
-                            color: const Color(0xFF1E293B),
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.inventory_2_outlined, size: 48, color: Color(0xFF94A3B8)),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Delivery Cargo & BOL Photo',
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  child: photoUrl != null
+                      ? InteractiveViewer(
+                          minScale: 1.0,
+                          maxScale: 3.5,
+                          child: photoUrl.startsWith('http')
+                              ? Image.network(
+                                  photoUrl,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) =>
+                                      _buildPodFallbackCard(),
+                                )
+                              : Image.file(
+                                  File(photoUrl),
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) =>
+                                      _buildPodFallbackCard(),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Signed by: ${widget.shipment.signedBy}',
-                                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Overlay: Zoom Hint
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.pinch_rounded, size: 12, color: Colors.white),
-                              SizedBox(width: 4),
-                              Text(
-                                'Pinch to Zoom',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Overlay: Verified Seal
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                          decoration: BoxDecoration(
-                            color: successGreen.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check_circle_rounded, size: 12, color: Colors.white),
-                              SizedBox(width: 4),
-                              Text(
-                                'VERIFIED POD',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Bottom Geostamp bar
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.85),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on_rounded, size: 12, color: primaryOrange),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  '${widget.shipment.destTitle} • ${widget.shipment.podDate}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 10.5),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                        )
+                      : _buildPodFallbackCard(),
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Metadata card
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: cardBorderColor),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Receiver Signer:', style: TextStyle(color: textMuted, fontSize: 11.5)),
-                        Text(widget.shipment.signedBy, style: const TextStyle(color: darkSlate, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Delivery Timestamp:', style: TextStyle(color: textMuted, fontSize: 11.5)),
-                        Text(widget.shipment.podDate, style: const TextStyle(color: darkSlate, fontSize: 11.5, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('CarrierDirect ID:', style: TextStyle(color: textMuted, fontSize: 11.5)),
-                        Text('#${widget.shipment.id}', style: const TextStyle(color: primaryOrange, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: darkSlate,
-                        side: const BorderSide(color: cardBorderColor),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-                      ),
-                      onPressed: () {
-                        AppToast.success(context, 'POD Photo & BOL document downloaded successfully!');
-                      },
-                      icon: const Icon(Icons.download_rounded, size: 16),
-                      label: const Text('Download', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryOrange,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryOrange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-                      ),
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -641,1177 +559,722 @@ class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen> with Sing
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: pageBg,
-      body: SafeArea(
+  Widget _buildPodFallbackCard() {
+    return Container(
+      color: const Color(0xFF1E293B),
+      padding: const EdgeInsets.all(16),
+      child: const Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 1. Top App Bar (Back Arrow, ORD-NIBE-10001, TRK-10001, Completed Badge, 3-dots)
-            _buildTopAppBar(),
-
-            // 2. Secondary Sub-Nav (Live Tracking, Copy Load ID, Chat)
-            _buildSubNavBar(),
-
-            // 3. Scrollable Cards Body (Animated with Shimmer Skeleton)
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _isLoading
-                    ? _buildSkeletonBody()
-                    : RefreshIndicator(
-                        onRefresh: _simulateRefresh,
-                        color: primaryOrange,
-                        child: ListView(
-                          key: const ValueKey('loaded_cards_body'),
-                          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
-                          children: [
-                            // Card 1: Route Header, Google Map, and 4-Stage Horizontal Stepper
-                            _buildRouteAndMapCard(),
-                            const SizedBox(height: 12),
-
-                            // Card 2: Current Status
-                            _buildCurrentStatusCard(),
-                            const SizedBox(height: 12),
-
-                            // Card 3: Pickup & Delivery Details
-                            _buildPickupDeliveryCard(),
-                            const SizedBox(height: 12),
-
-                            // Card 4: Cargo & Equipment (4 Columns)
-                            _buildCargoEquipmentCard(),
-                            const SizedBox(height: 12),
-
-                            // Card 5: Proof of Delivery (POD)
-                            _buildProofOfDeliveryCard(),
-                            const SizedBox(height: 12),
-
-                            // Card 6: Recent Activity Log
-                            _buildRecentActivityCard(),
-                            const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
+            Icon(
+              Icons.document_scanner_rounded,
+              size: 40,
+              color: Colors.white54,
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Proof of Delivery Attached',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
             ),
-
-            // 4. Fixed Bottom Action Buttons Bar (Live Tracking & Completed)
-            _buildBottomActionBar(),
           ],
         ),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // 1. Top App Bar
-  // ---------------------------------------------------------------------------
-  Widget _buildTopAppBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: cardBorderColor, width: 1)),
-      ),
-      child: Row(
-        children: [
-          // Back button
-          GestureDetector(
-            onTap: () {
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Padding(
-              padding: EdgeInsets.only(right: 14.0),
-              child: Icon(Icons.arrow_back, color: darkSlate, size: 22),
-            ),
-          ),
-
-          // Clean Screen Title
-          const Expanded(
-            child: Text(
-              'Shipment Details',
-              style: TextStyle(
-                color: darkSlate,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Status Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFA7F3D0)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check, size: 12, color: successGreen),
-                const SizedBox(width: 3),
-                Text(
-                  widget.shipment.statusLabel,
-                  style: const TextStyle(color: successGreen, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // 3-dots Menu
-          GestureDetector(
-            onTap: () {
-              AppToast.info(context, 'Load Options: #${widget.shipment.id}');
-            },
-            child: const Icon(Icons.more_vert_rounded, color: darkSlate, size: 22),
-          ),
-        ],
-      ),
+  void _openHandoverModal() {
+    HandoverModal.show(
+      context,
+      shipment: _shipment,
+      onSuccess: () {
+        _fetchShipmentDetails();
+      },
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // 2. Secondary Sub-Nav Bar (Live Tracking, Copy Load ID, Chat)
-  // ---------------------------------------------------------------------------
-  Widget _buildSubNavBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: cardBorderColor, width: 1)),
-      ),
-      child: Row(
-        children: [
-          // 1. GPS Navigation
-          Expanded(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => LiveTrackingScreen(shipment: widget.shipment)),
-                );
+  void _openAcceptHandoverModal() {
+    AcceptHandoverModal.show(
+      context,
+      shipment: _shipment,
+      onSuccess: () {
+        _fetchShipmentDetails();
+      },
+    );
+  }
+
+  String _getSlideActionText() {
+    final isRelay = _shipment.isRelay;
+    final isLeg1 = _shipment.isLeg1;
+    final isLeg2 = _shipment.isLeg2;
+    final rawStatus = (_shipment.rawStatus.isNotEmpty
+            ? _shipment.rawStatus
+            : _shipment.statusLabel)
+        .toLowerCase()
+        .trim();
+
+    final bool isPrePickup = rawStatus == 'assigned' ||
+        rawStatus == 'driver_assigned' ||
+        rawStatus == 'accepted' ||
+        rawStatus == 'confirmed' ||
+        rawStatus == 'scheduled' ||
+        rawStatus == 'new' ||
+        rawStatus == 'booked';
+    final bool isPickedUpState = rawStatus == 'at_pickup' || rawStatus == 'picked_up';
+    final bool isInTransitState = rawStatus == 'in_transit' || rawStatus == 'on_the_way';
+
+    // 1. Relay Leg 1 (Pickup -> Hub)
+    if (isRelay && isLeg1) {
+      if (isPrePickup) {
+        return 'Slide to confirm pickup';
+      } else if (isPickedUpState) {
+        final hub = _shipment.hubLocation.isNotEmpty ? _shipment.hubLocation : 'Hub';
+        return 'Slide to start transit to $hub';
+      } else if (isInTransitState) {
+        final hub = _shipment.hubLocation.isNotEmpty ? _shipment.hubLocation : 'Hub';
+        return 'Slide to arrive at $hub';
+      }
+      return 'Slide to update status';
+    }
+
+    // 2. Relay Leg 2 (Hub -> Destination)
+    if (isRelay && isLeg2) {
+      if (_shipment.isHandoverAccepted &&
+          !isInTransitState &&
+          rawStatus != 'at_delivery' &&
+          rawStatus != 'arrived') {
+        return 'Slide to start final transit';
+      } else if (isInTransitState) {
+        return 'Slide to arrive at Destination';
+      }
+      return 'Slide to update status';
+    }
+
+    // 3. Single Driver Shipment
+    if (isPrePickup) {
+      return 'Slide to confirm pickup';
+    } else if (isPickedUpState) {
+      return 'Slide to start transit';
+    } else if (isInTransitState) {
+      return 'Slide to arrive at Destination';
+    }
+    return 'Slide to update status';
+  }
+
+  String _getTargetStatus() {
+    final isRelay = _shipment.isRelay;
+    final isLeg1 = _shipment.isLeg1;
+    final isLeg2 = _shipment.isLeg2;
+    final rawStatus = (_shipment.rawStatus.isNotEmpty
+            ? _shipment.rawStatus
+            : _shipment.statusLabel)
+        .toLowerCase()
+        .trim();
+
+    final bool isPrePickup = rawStatus == 'assigned' ||
+        rawStatus == 'driver_assigned' ||
+        rawStatus == 'accepted' ||
+        rawStatus == 'confirmed' ||
+        rawStatus == 'scheduled' ||
+        rawStatus == 'new' ||
+        rawStatus == 'booked';
+    final bool isPickedUpState = rawStatus == 'at_pickup' || rawStatus == 'picked_up';
+    final bool isInTransitState = rawStatus == 'in_transit' || rawStatus == 'on_the_way';
+
+    // 1. Relay Leg 1 (Pickup -> Hub)
+    if (isRelay && isLeg1) {
+      if (isPrePickup) {
+        return 'picked_up';
+      } else if (isPickedUpState) {
+        return 'in_transit';
+      } else if (isInTransitState) {
+        return 'at_hub';
+      }
+      return 'at_hub';
+    }
+
+    // 2. Relay Leg 2 (Hub -> Destination)
+    if (isRelay && isLeg2) {
+      if (_shipment.isHandoverAccepted &&
+          !isInTransitState &&
+          rawStatus != 'at_delivery' &&
+          rawStatus != 'arrived') {
+        return 'in_transit';
+      } else if (isInTransitState) {
+        return 'at_delivery';
+      }
+      return 'at_delivery';
+    }
+
+    // 3. Single Driver Shipment
+    if (isPrePickup) {
+      return 'picked_up';
+    } else if (isPickedUpState) {
+      return 'in_transit';
+    } else if (isInTransitState) {
+      return 'at_delivery';
+    }
+    return 'at_delivery';
+  }
+
+  Future<bool> _handleSlideToAct() async {
+    if (_isUpdatingStatus) return false;
+    setState(() => _isUpdatingStatus = true);
+
+    final rawDbId = _shipment.dbId.trim();
+    final cleanOrderNum = _shipment.id.replaceAll('#', '').trim();
+    final shipmentId = rawDbId.isNotEmpty ? rawDbId : cleanOrderNum;
+    final targetStatus = _getTargetStatus();
+
+    try {
+      final token = await _getAuthToken();
+
+      final isDeliveredTarget =
+          targetStatus == 'completed' || targetStatus == 'delivered';
+
+      if (token != null && token.isNotEmpty) {
+        final endpoint =
+            '${ApiConstants.baseUrl}/driver/shipments/$shipmentId/status';
+        final res = await http
+            .post(
+              Uri.parse(endpoint),
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'ngrok-skip-browser-warning': 'true',
+                'Authorization': 'Bearer $token',
               },
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 11),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.navigation_rounded, size: 15, color: primaryOrange),
-                    SizedBox(width: 6),
-                    Text(
-                      'GPS Navigation',
-                      style: TextStyle(color: primaryOrange, fontSize: 12.5, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Container(width: 1, height: 20, color: cardBorderColor),
+              body: jsonEncode({
+                'status': targetStatus,
+                'notes': 'Status updated via driver slide action',
+              }),
+            )
+            .timeout(const Duration(seconds: 12));
 
-          // 2. Load ID with Copy
-          Expanded(
-            child: InkWell(
-              onTap: _copyLoadId,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.content_copy_outlined, size: 13, color: textMuted),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        widget.shipment.id,
-                        style: const TextStyle(color: textMuted, fontSize: 12, fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Container(width: 1, height: 20, color: cardBorderColor),
-
-          // 3. Chat
-          Expanded(
-            child: InkWell(
-              onTap: () => ChatChannelsModal.show(context, shipment: widget.shipment),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 11),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.chat_bubble_outline_rounded, size: 14, color: textMuted),
-                    SizedBox(width: 6),
-                    Text(
-                      'Chat',
-                      style: TextStyle(color: textMuted, fontSize: 12.5, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          final dynamic body = jsonDecode(res.body);
+          if (body is Map<String, dynamic> &&
+              body['data'] is Map<String, dynamic>) {
+            _parseAndApplyApiData(body['data'] as Map<String, dynamic>);
+            if (targetStatus.isNotEmpty && _shipment.rawStatus != targetStatus) {
+              setState(() {
+                _shipment = _shipment.copyWith(
+                  status: (targetStatus == 'delivered' || targetStatus == 'completed')
+                      ? ShipmentFilter.completed
+                      : ShipmentFilter.inProgress,
+                  statusLabel: _formatStatusLabel(targetStatus),
+                  rawStatus: targetStatus,
+                );
+              });
+            }
+          } else {
+            _applyLocalStatusTransition(targetStatus);
+          }
+          if (mounted) {
+            AppToast.success(
+              context,
+              'Status updated: ${_formatStatusLabel(targetStatus)}',
+            );
+            if (isDeliveredTarget) {
+              Future.delayed(const Duration(milliseconds: 350), () {
+                if (mounted) _showLoadDeliveredModal();
+              });
+            }
+          }
+          return true;
+        } else {
+          debugPrint('Status update error: ${res.statusCode} ${res.body}');
+          if (mounted) {
+            String errorMsg = 'Failed to update (${res.statusCode})';
+            try {
+              final errJson = jsonDecode(res.body);
+              if (errJson is Map && errJson['message'] != null) {
+                errorMsg = errJson['message'].toString();
+              }
+            } catch (_) {}
+            AppToast.error(context, errorMsg);
+          }
+          return false;
+        }
+      } else {
+        if (mounted) {
+          AppToast.error(context, 'Authentication required');
+        }
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Status update exception: $e');
+      if (mounted) {
+        AppToast.error(context, 'Network timeout updating status');
+      }
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Card 1: Route Header, Google Map, and 4-Stage Stepper
-  // ---------------------------------------------------------------------------
-  Widget _buildRouteAndMapCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+  void _applyLocalStatusTransition(String targetStatus) {
+    ShipmentFilter newFilter = _shipment.status;
+    String newLabel = _shipment.statusLabel;
+
+    setState(() {
+      if (targetStatus == 'in_progress') {
+        newFilter = ShipmentFilter.inProgress;
+        newLabel = 'In Progress';
+      } else if (targetStatus == 'picked_up') {
+        newFilter = ShipmentFilter.inProgress;
+        newLabel = 'Picked Up';
+      } else if (targetStatus == 'in_transit') {
+        newFilter = ShipmentFilter.inProgress;
+        newLabel = 'In Transit';
+      } else if (targetStatus == 'at_hub') {
+        newFilter = ShipmentFilter.inProgress;
+        newLabel = 'At Hub';
+      } else if (targetStatus == 'at_delivery' || targetStatus == 'arrived') {
+        newFilter = ShipmentFilter.inProgress;
+        newLabel = 'At Delivery';
+      } else if (targetStatus == 'completed' || targetStatus == 'delivered') {
+        newFilter = ShipmentFilter.completed;
+        newLabel = 'Delivered';
+      }
+
+      final nowIso = DateTime.now().toIso8601String();
+      _activityLog.insert(0, {
+        'status': targetStatus,
+        'title': _formatStatusLabel(targetStatus),
+        'created_at': nowIso,
+        'time': nowIso,
+        'date': nowIso,
+      });
+
+      _shipment = _shipment.copyWith(
+        status: newFilter,
+        statusLabel: newLabel,
+        rawStatus: targetStatus,
+      );
+    });
+
+    if (newFilter == ShipmentFilter.inProgress) {
+      OrderGpsTrackerService().startTracking(_shipment);
+    } else if (newFilter == ShipmentFilter.completed) {
+      OrderGpsTrackerService().stopTracking();
+    }
+  }
+
+  String _formatStatusLabel(String s) {
+    return s
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((word) {
+          if (word.isEmpty) return word;
+          return word[0].toUpperCase() + word.substring(1).toLowerCase();
+        })
+        .join(' ');
+  }
+
+  Widget _buildRouteSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header inside Map Card
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
+          // 1. Embedded Map Preview Skeleton (5px radius)
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5.0),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: const MapSkeletonPlaceholder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 2. Route Summary Bottom Skeleton (Outer card removed, clean layout)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF10B981),
-                        ),
+                      _buildShimmerBox(
+                        height: 15,
+                        width: 15,
+                        borderRadius: BorderRadius.circular(3.0),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${widget.shipment.originTitle} ➔ ${widget.shipment.destTitle}',
-                              style: const TextStyle(
-                                color: darkSlate,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              '${widget.shipment.truckId} • ${widget.shipment.distanceKm} km • ${widget.shipment.distanceKm > 100 ? '~3h 00m' : '~40m'}',
-                              style: const TextStyle(color: textMuted, fontSize: 11.5),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ],
-                        ),
+                      const SizedBox(width: 6),
+                      _buildShimmerBox(
+                        height: 14,
+                        width: 60,
+                        borderRadius: BorderRadius.circular(4.0),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-
-                // Open in Maps Button (with maps icon)
-                GestureDetector(
-                  onTap: _openExternalGoogleMaps,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFDBEAFE)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_rounded, size: 14, color: Color(0xFF2563EB)),
-                        SizedBox(width: 4),
-                        Text(
-                          'Open in Maps',
-                          style: TextStyle(
-                            color: Color(0xFF2563EB),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildShimmerBox(
+                    height: 16,
+                    width: 45,
+                    borderRadius: BorderRadius.circular(4.0),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Best Route Recommended Strip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF0FDF4),
-              border: Border(
-                top: BorderSide(color: Color(0xFFDCFCE7)),
-                bottom: BorderSide(color: Color(0xFFDCFCE7)),
+                ],
               ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.stars_rounded, size: 16, color: Color(0xFF059669)),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Best Route Active: Via Dhaka-Mymensingh Hwy N3 (Saves 18m • Fastest Corridor)',
-                    style: TextStyle(
-                      color: Color(0xFF065F46),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 38,
+                      borderRadius: BorderRadius.circular(5.0),
                     ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF059669),
-                    borderRadius: BorderRadius.circular(4),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 38,
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
                   ),
-                  child: const Text(
-                    'FASTEST',
-                    style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 38,
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Google Map Container
-          SizedBox(
-            height: 180,
-            width: double.infinity,
-            child: InAppGoogleMapView(
-              origin: LatLng(widget.shipment.originLat, widget.shipment.originLng),
-              destination: LatLng(widget.shipment.destLat, widget.shipment.destLng),
-              originTitle: widget.shipment.originTitle,
-              destinationTitle: widget.shipment.destTitle,
-              customRoutePoints: _routePoints,
-              customZoom: 11.5,
-              isInteractive: true,
-            ),
-          ),
-
-          // Stepper: 4 Milestones
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-            child: Column(
-              children: [
-                Row(
-                  children: List.generate(_stepperSteps.length * 2 - 1, (index) {
-                    if (index.isOdd) {
-                      // Connecting green bar
-                      return Expanded(
-                        child: Container(
-                          height: 2.5,
-                          color: const Color(0xFF10B981),
-                        ),
-                      );
-                    } else {
-                      // Circle with checkmark
-                      return Container(
-                        width: 22,
-                        height: 22,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF10B981),
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.check, size: 13, color: Colors.white),
-                        ),
-                      );
-                    }
-                  }),
-                ),
-                const SizedBox(height: 8),
-
-                // Titles & Dates
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _stepperSteps.map((step) {
-                    return Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            step['title']!,
-                            style: const TextStyle(
-                              color: darkSlate,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 1),
-                          Text(
-                            step['time']!,
-                            style: const TextStyle(
-                              color: textMuted,
-                              fontSize: 9.5,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Rounded pill button shimmer
+              _buildShimmerBox(
+                height: 38,
+                borderRadius: BorderRadius.circular(24.0),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Card 2: Current Status
-  // ---------------------------------------------------------------------------
-  Widget _buildCurrentStatusCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+  Widget _buildSkeletonBody() {
+    if (_selectedTabIndex == 1) {
+      return _buildRouteSkeleton();
+    }
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
+      children: [
+        // 1. Facility & Location Details Card Skeleton
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4.0),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: Checkmark + Current Status + Completed badge
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.check_circle_rounded, color: successGreen, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Current Status',
-                    style: TextStyle(color: darkSlate, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFA7F3D0)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check, size: 11, color: successGreen),
-                    const SizedBox(width: 3),
-                    Text(
-                      widget.shipment.statusLabel,
-                      style: const TextStyle(color: successGreen, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Content: Orange Truck Icon + Description
-          Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.local_shipping_rounded, color: primaryOrange, size: 20),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Shipment Approved & Completed',
-                      style: TextStyle(color: darkSlate, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Customer has approved the Proof of Delivery (POD). Settlement finalized.',
-                      style: TextStyle(color: textMuted, fontSize: 11.5, height: 1.3),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Card 3: Pickup & Delivery Details (Key-Value layout with chat & date badges)
-  // ---------------------------------------------------------------------------
-  Widget _buildPickupDeliveryCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.location_on_outlined, color: primaryOrange, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Pickup & Delivery Details',
-                    style: TextStyle(color: darkSlate, fontSize: 14, fontWeight: FontWeight.bold),
+                  _buildShimmerBox(
+                    height: 20,
+                    width: 20,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildShimmerBox(
+                    height: 16,
+                    width: 160,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(5.0),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
-                ),
-                child: const Text(
-                  'Location Intel',
-                  style: TextStyle(color: Color(0xFF2563EB), fontSize: 10.5, fontWeight: FontWeight.bold),
-                ),
+              const SizedBox(height: 14),
+              _buildShimmerBox(
+                height: 52,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              const SizedBox(height: 12),
+              _buildShimmerBox(
+                height: 52,
+                borderRadius: BorderRadius.circular(4),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 12),
-
-          // Facility 1: Pickup Shipper Facility
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.circle, color: Color(0xFF0284C7), size: 8),
-                  SizedBox(width: 6),
-                  Text(
-                    'Pickup Shipper Facility',
-                    style: TextStyle(color: Color(0xFF0284C7), fontSize: 12.5, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              Text(
-                '📅 ${widget.shipment.pickupDate}',
-                style: const TextStyle(color: textMuted, fontSize: 11, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _buildKeyValueRow('Company', widget.shipment.originCompany),
-          const SizedBox(height: 4),
-          _buildKeyValueRow('Address', widget.shipment.originAddress),
-          const SizedBox(height: 4),
-          _buildKeyValueRow('Pickup Time', widget.shipment.pickupTime),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: () {
-                ChatScreen.openForShipment(
-                  context,
-                  shipment: widget.shipment,
-                  initialChannelType: ChatChannelType.supplierWarehouse,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F9FF),
-                  borderRadius: BorderRadius.circular(5.0),
-                  border: Border.all(color: const Color(0xFFBAE6FD)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.chat_bubble_outline_rounded, size: 12, color: Color(0xFF0284C7)),
-                    SizedBox(width: 5),
-                    Text('Chat Shipper', style: TextStyle(fontSize: 11, color: Color(0xFF0284C7), fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 12),
-
-          // Facility 2: Delivery Consignee (Final)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.circle, color: primaryOrange, size: 8),
-                  SizedBox(width: 6),
-                  Text(
-                    'Delivery Consignee (Final)',
-                    style: TextStyle(color: primaryOrange, fontSize: 12.5, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              Text(
-                '📅 ${widget.shipment.deliveryDate}',
-                style: const TextStyle(color: textMuted, fontSize: 11, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _buildKeyValueRow('Company', widget.shipment.destCompany),
-          const SizedBox(height: 4),
-          _buildKeyValueRow('Address', widget.shipment.destAddress),
-          const SizedBox(height: 4),
-          _buildKeyValueRow('Delivery Time', widget.shipment.deliveryTime, isHighlight: true),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: () {
-                ChatScreen.openForShipment(
-                  context,
-                  shipment: widget.shipment,
-                  initialChannelType: ChatChannelType.customerConsignee,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(5.0),
-                  border: Border.all(color: const Color(0xFFFED7AA)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.chat_bubble_outline_rounded, size: 12, color: primaryOrange),
-                    SizedBox(width: 5),
-                    Text('Chat Consignee', style: TextStyle(fontSize: 11, color: primaryOrange, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Card 4: Cargo Manifest & Equipment Specs (Key-Value table like previous design)
-  // ---------------------------------------------------------------------------
-  Widget _buildCargoEquipmentCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Row(
-                  children: [
-                    Icon(Icons.inventory_2_outlined, color: primaryOrange, size: 18),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Cargo Manifest & Equipment Specs',
-                        style: TextStyle(color: darkSlate, fontSize: 13, fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFA7F3D0)),
-                ),
-                child: const Text(
-                  'Standard Dry Freight',
-                  style: TextStyle(color: successGreen, fontSize: 10.5, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 12),
-
-          _buildKeyValueRow('Equipment Type', widget.shipment.equipmentType),
-          const Divider(color: cardBorderColor, height: 16),
-          _buildKeyValueRow('Pallet Quantity', widget.shipment.palletQuantity),
-          const Divider(color: cardBorderColor, height: 16),
-          _buildKeyValueRow('Temperature', widget.shipment.temperature),
-          const Divider(color: cardBorderColor, height: 16),
-          _buildKeyValueRow('Cargo Manifest', widget.shipment.cargoManifest),
-          const Divider(color: cardBorderColor, height: 16),
-          _buildKeyValueRow('Payload Weight', widget.shipment.payloadWeight, isBoldValue: true),
-          const Divider(color: cardBorderColor, height: 16),
-          _buildKeyValueRow('Route Distance', '${widget.shipment.distanceKm} km (03:00 PM - 03:00 PM)'),
-          const Divider(color: cardBorderColor, height: 16),
-          _buildKeyValueRow('Hazmat Status', widget.shipment.hazmatStatus),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Card 5: Proof of Delivery (POD) Sign-Off & Driver Compliance
-  // ---------------------------------------------------------------------------
-  Widget _buildProofOfDeliveryCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.assignment_turned_in_outlined, color: primaryOrange, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Proof of Delivery (POD) Sign-Off',
-                    style: TextStyle(color: darkSlate, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFA7F3D0)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check, size: 11, color: successGreen),
-                    SizedBox(width: 3),
-                    Text(
-                      'Verified',
-                      style: TextStyle(color: successGreen, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 12),
-
-          _buildKeyValueRow('Signed By', widget.shipment.signedBy, isBoldValue: true),
-          const SizedBox(height: 6),
-          _buildKeyValueRow('Time & Date', widget.shipment.podDate),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 12),
-
-          // Signed Paper BOL / Cargo Photo Item (Fully Clickable Card)
-          Material(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(8.0),
-            child: InkWell(
-              onTap: _viewPodPhoto,
-              borderRadius: BorderRadius.circular(8.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8.0),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7ED),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFFFEDD5)),
-                      ),
-                      child: const Icon(Icons.photo_library_outlined, color: primaryOrange, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Signed Paper BOL / Cargo Photo',
-                            style: TextStyle(color: darkSlate, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 1),
-                          Text(
-                            'Tap to view verified delivery proof',
-                            style: TextStyle(color: textMuted, fontSize: 10.5),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7ED),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFFED7AA)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.visibility_outlined, size: 13, color: primaryOrange),
-                          SizedBox(width: 4),
-                          Text(
-                            'View Photo',
-                            style: TextStyle(color: primaryOrange, fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 10),
-
-          // Driver Compliance row
-          const Row(
-            children: [
-              Icon(Icons.verified_user_outlined, color: successGreen, size: 15),
-              SizedBox(width: 6),
-              Text(
-                'Driver Compliance:',
-                style: TextStyle(color: textMuted, fontSize: 11.5),
-              ),
-              SizedBox(width: 5),
-              Text(
-                'Verified Active',
-                style: TextStyle(color: successGreen, fontSize: 11.5, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Helper: Key-Value Row with aligned colon (:)
-  // ---------------------------------------------------------------------------
-  Widget _buildKeyValueRow(String label, String value, {bool isHighlight = false, bool isBoldValue = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 105,
-          child: Text(
-            label,
-            style: const TextStyle(color: textMuted, fontSize: 11.5),
           ),
         ),
-        const Text(
-          ': ',
-          style: TextStyle(color: textMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
+        const SizedBox(height: 12),
+
+        // 2. Shipment Information Card Skeleton (Grid of attributes)
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4.0),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _buildShimmerBox(
+                    height: 20,
+                    width: 20,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildShimmerBox(
+                    height: 16,
+                    width: 150,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 60,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 60,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 60,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 60,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 60,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildShimmerBox(
+                      height: 60,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              color: isHighlight ? successGreen : darkSlate,
-              fontSize: 11.5,
-              fontWeight: isHighlight || isBoldValue ? FontWeight.bold : FontWeight.w500,
-            ),
+        const SizedBox(height: 12),
+
+        // 3. Activity Timeline Skeleton Card
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4.0),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _buildShimmerBox(
+                    height: 20,
+                    width: 20,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildShimmerBox(
+                    height: 16,
+                    width: 140,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _buildShimmerBox(
+                height: 40,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              const SizedBox(height: 10),
+              _buildShimmerBox(
+                height: 40,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              const SizedBox(height: 10),
+              _buildShimmerBox(
+                height: 40,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Card 6: Recent Activity Log
-  // ---------------------------------------------------------------------------
-  Widget _buildRecentActivityCard() {
-    final List<Map<String, String>> activities = const [
-      {'title': 'Order Confirmed', 'time': 'Oct 17, 2026, 08:34 AM'},
-      {'title': 'Driver Assigned', 'time': 'Oct 17, 2026, 08:41 AM'},
-      {'title': 'Goods Picked Up', 'time': 'Oct 17, 2026, 09:45 AM'},
-      {'title': 'In Transit', 'time': 'Oct 17, 2026, 08:45 AM'},
-      {'title': 'Delivery Approved & Completed', 'time': 'Oct 17, 2026, 09:51 AM'},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.access_time_rounded, color: primaryOrange, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Recent Activity',
-                    style: TextStyle(color: darkSlate, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              Text(
-                'All Complete',
-                style: TextStyle(color: primaryOrange, fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: cardBorderColor, height: 1),
-          const SizedBox(height: 12),
-
-          // Events
-          ...activities.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final item = entry.value;
-            final isLast = idx == activities.length - 1;
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Column(
-                  children: [
-                    Container(
-                      width: 18,
-                      height: 18,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFF10B981),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.check, size: 12, color: Colors.white),
-                      ),
-                    ),
-                    if (!isLast)
-                      Container(
-                        width: 2,
-                        height: 22,
-                        color: const Color(0xFFA7F3D0),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: isLast ? 0 : 6.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          item['title']!,
-                          style: const TextStyle(color: darkSlate, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          item['time']!,
-                          style: const TextStyle(color: textMuted, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+  Widget _buildShimmerBox({
+    required double height,
+    double? width,
+    BorderRadius? borderRadius,
+  }) {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation ?? const AlwaysStoppedAnimation(0),
+      builder: (context, child) {
+        return Container(
+          height: height,
+          width: width,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius ?? BorderRadius.circular(8),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: const [
+                Color(0xFFE2E8F0),
+                Color(0xFFF1F5F9),
+                Color(0xFFE2E8F0),
               ],
-            );
-          }),
-        ],
-      ),
+              stops: [
+                (_shimmerAnimation?.value ?? 0.0) - 0.3,
+                (_shimmerAnimation?.value ?? 0.0),
+                (_shimmerAnimation?.value ?? 0.0) + 0.3,
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // 4. Fixed Bottom Action Buttons Bar
-  // ---------------------------------------------------------------------------
-  Widget _buildBottomActionBar() {
-    if (_isLoading) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: cardBorderColor, width: 1)),
-        ),
-        child: Row(
+  @override
+  Widget build(BuildContext context) {
+    final hasPodProof = (_podPhotoUrl != null && _podPhotoUrl!.isNotEmpty) ||
+        (_signatureUrl != null && _signatureUrl!.isNotEmpty);
+    final isDelivered =
+        _shipment.status == ShipmentFilter.completed ||
+        hasPodProof ||
+        _shipment.rawStatus.toLowerCase() == 'delivered' ||
+        _shipment.rawStatus.toLowerCase() == 'completed' ||
+        (_podStatus != null &&
+            (_podStatus == 'delivered' ||
+                _podStatus == 'verified' ||
+                _podStatus == 'approved' ||
+                _podStatus == 'completed'));
+
+    return Scaffold(
+      backgroundColor: pageBg,
+      body: SafeArea(
+        child: Column(
           children: [
-            Expanded(
-              child: _buildShimmerBox(height: 46, borderRadius: BorderRadius.circular(8)),
+            ShipmentTopAppBar(
+              shipment: _shipment,
+              onBack: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
+              },
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildShimmerBox(height: 46, borderRadius: BorderRadius.circular(8)),
+            ShipmentOrderHeaderCard(shipment: _shipment, onCopyId: _copyLoadId),
+            ShipmentTabBar(
+              selectedIndex: _selectedTabIndex,
+              onTabSelected: (index) {
+                setState(() => _selectedTabIndex = index);
+                if (_pageController.hasClients) {
+                  _pageController.animateToPage(
+                    index,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              },
             ),
+            Expanded(
+              child: _isLoading
+                  ? _buildSkeletonBody()
+                  : PageView(
+                      controller: _pageController,
+                      physics: _selectedTabIndex == 1
+                          ? const NeverScrollableScrollPhysics()
+                          : const ClampingScrollPhysics(),
+                      onPageChanged: (index) {
+                        setState(() => _selectedTabIndex = index);
+                      },
+                      children: [
+                        RefreshIndicator(
+                          onRefresh: _simulateRefresh,
+                          color: primaryOrange,
+                          child: ShipmentOverviewTab(
+                            shipment: _shipment,
+                            isDelivered: isDelivered,
+                            podPhotoUrl: _podPhotoUrl,
+                            receiverName: _receiverName,
+                            podStatus: _podStatus,
+                            signatureUrl: _signatureUrl,
+                            cargoDimensions: _cargoDimensions,
+                            specialInstructions: _specialInstructions,
+                            activityLog: _activityLog,
+                            onOpenPodModal: _showLoadDeliveredModal,
+                            onViewPodPhoto: _viewPodPhoto,
+                            onOpenHandover: _openHandoverModal,
+                            onOpenAcceptHandover: _openAcceptHandoverModal,
+                          ),
+                        ),
+                        ShipmentRouteTab(
+                          shipment: _shipment,
+                          estimatedDuration: _estimatedDuration,
+                          routePoints: _dynamicRoutePoints,
+                          onOpenExternalMaps: _openExternalGoogleMaps,
+                          isActive: _selectedTabIndex == 1,
+                        ),
+                      ],
+                    ),
+            ),
+            if (_selectedTabIndex == 0)
+              ShipmentBottomActionBar(
+                shipment: _shipment,
+                isLoading: _isLoading,
+                isUpdatingStatus: _isUpdatingStatus,
+                isDelivered: isDelivered,
+                podStatus: _podStatus,
+                slideActionText: _getSlideActionText(),
+                onSlideComplete: _handleSlideToAct,
+                onOpenHandover: _openHandoverModal,
+                onOpenAcceptHandover: _openAcceptHandoverModal,
+                onOpenPodModal: _showLoadDeliveredModal,
+              ),
           ],
         ),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: cardBorderColor, width: 1)),
-      ),
-      child: Row(
-        children: [
-          // GPS Navigation (Outlined orange)
-          Expanded(
-            child: SizedBox(
-              height: 46,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => LiveTrackingScreen(shipment: widget.shipment)),
-                  );
-                },
-                icon: const Icon(Icons.navigation_rounded, size: 16, color: primaryOrange),
-                label: const Text(
-                  'GPS Navigation',
-                  style: TextStyle(color: primaryOrange, fontSize: 13.5, fontWeight: FontWeight.bold),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: primaryOrange, width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // Completed (Solid green)
-          Expanded(
-            child: SizedBox(
-              height: 46,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  AppToast.success(context, 'Shipment #${widget.shipment.id} is finalized & completed.');
-                },
-                icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
-                label: const Text(
-                  'Completed',
-                  style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: successGreen,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

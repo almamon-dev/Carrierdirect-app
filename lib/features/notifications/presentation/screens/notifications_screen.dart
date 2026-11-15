@@ -1,5 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/local_storage.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../data/datasources/notifications_mock_data_source.dart';
 import '../../data/models/notification_model.dart';
@@ -12,36 +21,175 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int _selectedFilterIndex = 0;
   List<NotificationModel> _notifications = [];
+  bool _isLoading = true;
+  Timer? _autoRefreshTimer;
+  late final AnimationController _shimmerController;
+  late final Animation<double> _shimmerAnimation;
 
   static const Color primaryColor = AppColors.primary;
-  static const Color lightBg = Color(0xFFF8FAFC);
+  static const Color lightBg = AppColors.background;
   static const Color searchBg = Color(0xFFF1F5F9);
   static const Color cardBorder = AppColors.border;
   static const Color textSub = AppColors.textSecondary;
   static const Color textMain = AppColors.textPrimary;
-  static const Color accentOrange = Color(0xFFFF5722);
+  static const Color accentOrange = AppColors.primary;
 
   @override
   void initState() {
     super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOutSine),
+    );
     _loadNotifications();
+    _startAutoRefresh();
   }
 
   @override
   void dispose() {
+    _shimmerController.dispose();
+    _autoRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _loadNotifications() {
-    setState(() {
-      _notifications = NotificationsMockDataSource.getNotifications();
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(milliseconds: 3000), (_) {
+      if (mounted) {
+        _loadNotifications(showLoading: false);
+      }
     });
+  }
+
+  Future<String?> _getAuthToken() async {
+    final token = await SecureStorage().read(AppConstants.keyAuthToken);
+    if (token != null && token.isNotEmpty) return token;
+    final localToken = await LocalStorage().getString(
+      AppConstants.keyAuthToken,
+    );
+    if (localToken != null && localToken.isNotEmpty) return localToken;
+    return null;
+  }
+
+  Future<void> _loadNotifications({bool showLoading = true}) async {
+    if (showLoading && mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    try {
+      final token = await _getAuthToken();
+      if (token == null) {
+        // Fallback to mock if not logged in
+        if (mounted) {
+          setState(() {
+            _notifications = NotificationsMockDataSource.getNotifications();
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.driverNotifications}',
+      );
+      final res = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final data = body['data'] as Map<String, dynamic>? ?? {};
+        final rawList = data['notifications'] as List<dynamic>? ?? [];
+
+        final List<NotificationModel> parsed = [];
+        for (final item in rawList) {
+          if (item is Map<String, dynamic>) {
+            parsed.add(NotificationModel.fromJson(item));
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _notifications = parsed;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error loading notifications: $e');
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _markSingleAsRead(String id) async {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index != -1 && !_notifications[index].isRead) {
+      setState(() {
+        _notifications[index] = _notifications[index].copyWith(isRead: true);
+      });
+
+      try {
+        final token = await _getAuthToken();
+        if (token == null) return;
+        final uri = Uri.parse(
+          '${ApiConstants.baseUrl}/driver/notifications/$id/read',
+        );
+        await http
+            .post(
+              uri,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+            )
+            .timeout(const Duration(seconds: 6));
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _deleteNotification(String id) async {
+    setState(() {
+      _notifications.removeWhere((n) => n.id == id);
+    });
+    AppToast.info(context, 'Notification removed');
+
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return;
+      final uri = Uri.parse('${ApiConstants.baseUrl}/driver/notifications/$id');
+      await http
+          .delete(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
+    } catch (e) {
+      debugPrint('Error deleting notification: $e');
+    }
   }
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
@@ -55,18 +203,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         list = list.where((n) => !n.isRead).toList();
         break;
       case 2: // Dock & Bay
-        list = list.where((n) => n.category == NotificationCategory.dockSecurity).toList();
+        list = list
+            .where((n) => n.category == NotificationCategory.dockSecurity)
+            .toList();
         break;
       case 3: // Paperwork (BOL)
-        list = list.where((n) => n.category == NotificationCategory.paperworkBol).toList();
+        list = list
+            .where((n) => n.category == NotificationCategory.paperworkBol)
+            .toList();
         break;
       case 4: // Loads
-        list = list.where((n) => n.category == NotificationCategory.loadAssignment).toList();
+        list = list
+            .where((n) => n.category == NotificationCategory.loadAssignment)
+            .toList();
         break;
       case 5: // Alerts
-        list = list.where((n) =>
-            n.category == NotificationCategory.trafficAlert ||
-            n.category == NotificationCategory.complianceSafety).toList();
+        list = list
+            .where(
+              (n) =>
+                  n.category == NotificationCategory.trafficAlert ||
+                  n.category == NotificationCategory.complianceSafety,
+            )
+            .toList();
         break;
       default: // 0 -> All
         break;
@@ -92,15 +250,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _openDetails(NotificationModel notif) {
+    _markSingleAsRead(notif.id);
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NotificationDetailsScreen(
           notification: notif,
-          onDeleted: () => _loadNotifications(),
+          onDeleted: () => _loadNotifications(showLoading: false),
         ),
       ),
-    ).then((_) => _loadNotifications());
+    ).then((_) => _loadNotifications(showLoading: false));
   }
 
   Color _getCategoryColor(NotificationCategory category) {
@@ -154,12 +313,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _markAllAsRead() {
+  Future<void> _markAllAsRead() async {
     setState(() {
-      NotificationsMockDataSource.markAllAsRead();
-      _loadNotifications();
+      _notifications = _notifications
+          .map((n) => n.copyWith(isRead: true))
+          .toList();
     });
     AppToast.info(context, 'All notifications marked as read');
+
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return;
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.markAllNotificationsRead}',
+      );
+      await http
+          .post(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('Error marking all notifications read: $e');
+    }
   }
 
   Widget _buildFilterPill({
@@ -223,258 +402,299 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       backgroundColor: lightBg,
       body: SafeArea(
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // 1. Header: Notifications Title + Circle Button (matching Messages Header)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16.0, 14.0, 16.0, 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Notifications',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: textMain,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                        if (unreadTotal > 0) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: accentOrange,
-                              borderRadius: BorderRadius.circular(10),
+        child: RefreshIndicator(
+          color: primaryColor,
+          backgroundColor: Colors.white,
+          onRefresh: () => _loadNotifications(showLoading: false),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // 1. Header: Notifications Title + Circle Button (matching Messages Header)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 14.0, 16.0, 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'Notifications',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: textMain,
+                              letterSpacing: -0.4,
                             ),
-                            child: Text(
-                              '$unreadTotal',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                          ),
+                          if (unreadTotal > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accentOrange,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$unreadTotal',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
-                    ),
-                    // Circular Action Button (Mark All Read)
-                    InkWell(
-                      onTap: unreadTotal > 0 ? _markAllAsRead : null,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: unreadTotal > 0 ? primaryColor : searchBg,
-                          shape: BoxShape.circle,
-                          boxShadow: unreadTotal > 0
-                              ? [
-                                  BoxShadow(
-                                    color: primaryColor.withValues(alpha: 0.3),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Center(
-                          child: Icon(
-                            Icons.done_all_rounded,
-                            size: 20,
-                            color: unreadTotal > 0 ? Colors.white : textSub,
+                      ),
+                      // Circular Action Button (Mark All Read)
+                      InkWell(
+                        onTap: unreadTotal > 0 ? _markAllAsRead : null,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: unreadTotal > 0 ? primaryColor : searchBg,
+                            shape: BoxShape.circle,
+                            boxShadow: unreadTotal > 0
+                                ? [
+                                    BoxShadow(
+                                      color: primaryColor.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.done_all_rounded,
+                              size: 20,
+                              color: unreadTotal > 0 ? Colors.white : textSub,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // 2. Search Notifications Bar (100% Fully Rounded Stadium Shape)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                child: Container(
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: searchBg,
-                    borderRadius: BorderRadius.circular(60),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                    style: const TextStyle(fontSize: 13.5, color: textMain),
-                    cursorColor: primaryColor,
-                    textAlignVertical: TextAlignVertical.center,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: true,
-                      fillColor: searchBg,
-                      hintText: 'Search notifications or loads',
-                      hintStyle: const TextStyle(fontSize: 13, color: textSub),
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.only(left: 14.0, right: 8.0),
-                        child: Icon(Icons.search_rounded, color: textSub, size: 20),
-                      ),
-                      prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 42),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 16, color: textSub),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(60),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(60),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(60),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // 3. Filter Tabs (All / Unread / Categories matching Messages style)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: [
-                      _buildFilterPill(
-                        title: 'All (${_notifications.length})',
-                        isSelected: _selectedFilterIndex == 0,
-                        onTap: () => setState(() => _selectedFilterIndex = 0),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        title: 'Unread',
-                        count: unreadTotal,
-                        isSelected: _selectedFilterIndex == 1,
-                        onTap: () => setState(() => _selectedFilterIndex = 1),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        title: 'Dock & Bay',
-                        isSelected: _selectedFilterIndex == 2,
-                        onTap: () => setState(() => _selectedFilterIndex = 2),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        title: 'Paperwork',
-                        isSelected: _selectedFilterIndex == 3,
-                        onTap: () => setState(() => _selectedFilterIndex = 3),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        title: 'Loads',
-                        isSelected: _selectedFilterIndex == 4,
-                        onTap: () => setState(() => _selectedFilterIndex = 4),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        title: 'Alerts',
-                        isSelected: _selectedFilterIndex == 5,
-                        onTap: () => setState(() => _selectedFilterIndex = 5),
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
 
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 6),
-            ),
-
-            // 4. Notifications List or Empty State
-            if (displayList.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 40.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.notifications_none_rounded,
-                          size: 48,
-                          color: Color(0xFF94A3B8),
+              // 2. Search Notifications Bar (100% Fully Rounded Stadium Shape)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 6.0,
+                  ),
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: searchBg,
+                      borderRadius: BorderRadius.circular(60),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      style: const TextStyle(fontSize: 13.5, color: textMain),
+                      cursorColor: primaryColor,
+                      textAlignVertical: TextAlignVertical.center,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: searchBg,
+                        hintText: 'Search notifications or loads',
+                        hintStyle: const TextStyle(
+                          fontSize: 13,
+                          color: textSub,
                         ),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'No notifications found',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: textMain,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'You are all caught up with your logistics\nalerts, dock clearances and load updates.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12.5,
+                        prefixIcon: const Padding(
+                          padding: EdgeInsets.only(left: 14.0, right: 8.0),
+                          child: Icon(
+                            Icons.search_rounded,
                             color: textSub,
-                            height: 1.4,
+                            size: 20,
                           ),
                         ),
-                        if (_searchQuery.isNotEmpty || _selectedFilterIndex != 0) ...[
-                          const SizedBox(height: 16),
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                                _selectedFilterIndex = 0;
-                              });
-                            },
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Reset filters'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: primaryColor,
-                              side: const BorderSide(color: primaryColor),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
-                          ),
-                        ],
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 42,
+                          minHeight: 42,
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.clear_rounded,
+                                  size: 16,
+                                  color: textSub,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(60),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(60),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(60),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                          horizontal: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // 3. Filter Tabs (All / Unread / Categories matching Messages style)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 6.0,
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _buildFilterPill(
+                          title: 'All (${_notifications.length})',
+                          isSelected: _selectedFilterIndex == 0,
+                          onTap: () => setState(() => _selectedFilterIndex = 0),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          title: 'Unread',
+                          count: unreadTotal,
+                          isSelected: _selectedFilterIndex == 1,
+                          onTap: () => setState(() => _selectedFilterIndex = 1),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          title: 'Dock & Bay',
+                          isSelected: _selectedFilterIndex == 2,
+                          onTap: () => setState(() => _selectedFilterIndex = 2),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          title: 'Paperwork',
+                          isSelected: _selectedFilterIndex == 3,
+                          onTap: () => setState(() => _selectedFilterIndex = 3),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          title: 'Loads',
+                          isSelected: _selectedFilterIndex == 4,
+                          onTap: () => setState(() => _selectedFilterIndex = 4),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          title: 'Alerts',
+                          isSelected: _selectedFilterIndex == 5,
+                          onTap: () => setState(() => _selectedFilterIndex = 5),
+                        ),
                       ],
                     ),
                   ),
                 ),
-              )
-            else
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 6)),
+
+              // 4. Notifications List or Empty State
+              if (_isLoading && _notifications.isEmpty)
+                _buildSkeletonSliverList()
+              else if (displayList.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32.0,
+                        vertical: 40.0,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.notifications_none_rounded,
+                            size: 48,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'No notifications found',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: textMain,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'You are all caught up with your logistics\nalerts, dock clearances and load updates.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: textSub,
+                              height: 1.4,
+                            ),
+                          ),
+                          if (_searchQuery.isNotEmpty ||
+                              _selectedFilterIndex != 0) ...[
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                  _selectedFilterIndex = 0;
+                                });
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('Reset filters'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: primaryColor,
+                                side: const BorderSide(color: primaryColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
                     final notif = displayList[index];
                     final catColor = _getCategoryColor(notif.category);
                     final catIcon = _getCategoryIcon(notif.category);
-                    final isUrgent = notif.priority == NotificationPriority.urgent;
+                    final isUrgent =
+                        notif.priority == NotificationPriority.urgent;
 
                     return Column(
                       children: [
@@ -488,24 +708,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             child: const Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                Icon(Icons.delete_outline_rounded, color: Colors.white, size: 20),
+                                Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   'Delete',
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           onDismissed: (_) {
-                            NotificationsMockDataSource.deleteNotification(notif.id);
-                            _loadNotifications();
-                            AppToast.info(context, 'Notification removed');
+                            _deleteNotification(notif.id);
                           },
                           child: InkWell(
                             onTap: () => _openDetails(notif),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 12.0,
+                              ),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -517,14 +746,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                         height: 48,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: catColor.withValues(alpha: 0.12),
+                                          color: catColor.withValues(
+                                            alpha: 0.12,
+                                          ),
                                           border: Border.all(
-                                            color: notif.isRead ? cardBorder : catColor.withValues(alpha: 0.3),
+                                            color: notif.isRead
+                                                ? cardBorder
+                                                : catColor.withValues(
+                                                    alpha: 0.3,
+                                                  ),
                                             width: 1,
                                           ),
                                         ),
                                         child: Center(
-                                          child: Icon(catIcon, color: catColor, size: 22),
+                                          child: Icon(
+                                            catIcon,
+                                            color: catColor,
+                                            size: 22,
+                                          ),
                                         ),
                                       ),
                                       if (isUrgent)
@@ -537,10 +776,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             decoration: BoxDecoration(
                                               color: const Color(0xFFEF4444),
                                               shape: BoxShape.circle,
-                                              border: Border.all(color: Colors.white, width: 2),
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 2,
+                                              ),
                                             ),
                                             child: const Center(
-                                              child: Icon(Icons.priority_high_rounded, size: 9, color: Colors.white),
+                                              child: Icon(
+                                                Icons.priority_high_rounded,
+                                                size: 9,
+                                                color: Colors.white,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -551,18 +797,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   // Notification Content & Metadata
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         // Row 1: Title + Timestamp
                                         Row(
-                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
                                           children: [
                                             Expanded(
                                               child: Text(
                                                 notif.title,
                                                 style: TextStyle(
                                                   fontSize: 14.5,
-                                                  fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.bold,
+                                                  fontWeight: notif.isRead
+                                                      ? FontWeight.w600
+                                                      : FontWeight.bold,
                                                   color: textMain,
                                                 ),
                                                 maxLines: 1,
@@ -574,8 +824,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                               notif.timeAgo,
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                fontWeight: notif.isRead ? FontWeight.normal : FontWeight.bold,
-                                                color: notif.isRead ? textSub : primaryColor,
+                                                fontWeight: notif.isRead
+                                                    ? FontWeight.normal
+                                                    : FontWeight.bold,
+                                                color: notif.isRead
+                                                    ? textSub
+                                                    : primaryColor,
                                               ),
                                             ),
                                           ],
@@ -587,8 +841,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           notif.message,
                                           style: TextStyle(
                                             fontSize: 12.5,
-                                            fontWeight: notif.isRead ? FontWeight.normal : FontWeight.w500,
-                                            color: notif.isRead ? textSub : textMain.withValues(alpha: 0.9),
+                                            fontWeight: notif.isRead
+                                                ? FontWeight.normal
+                                                : FontWeight.w500,
+                                            color: notif.isRead
+                                                ? textSub
+                                                : textMain.withValues(
+                                                    alpha: 0.9,
+                                                  ),
                                             height: 1.3,
                                           ),
                                           maxLines: 2,
@@ -602,21 +862,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           children: [
                                             // Category Pill
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 7,
+                                                    vertical: 2.5,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: catColor.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(6),
+                                                color: catColor.withValues(
+                                                  alpha: 0.1,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Icon(catIcon, size: 10.5, color: catColor),
+                                                  Icon(
+                                                    catIcon,
+                                                    size: 10.5,
+                                                    color: catColor,
+                                                  ),
                                                   const SizedBox(width: 4),
                                                   Text(
-                                                    _getCategoryPillName(notif.category),
+                                                    _getCategoryPillName(
+                                                      notif.category,
+                                                    ),
                                                     style: TextStyle(
                                                       fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       color: catColor,
                                                     ),
                                                   ),
@@ -626,10 +900,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             if (notif.shipmentId != null) ...[
                                               const SizedBox(width: 6),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2.5,
+                                                    ),
                                                 decoration: BoxDecoration(
                                                   color: searchBg,
-                                                  borderRadius: BorderRadius.circular(6),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
                                                 ),
                                                 child: Text(
                                                   '#${notif.shipmentId}',
@@ -671,13 +950,136 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                       ],
                     );
-                  },
-                  childCount: displayList.length,
+                  }, childCount: displayList.length),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  // =========================================================================
+  // SKELETON SHIMMER LOADER HELPERS
+  // =========================================================================
+  Widget _buildShimmerBox({
+    required double width,
+    required double height,
+    BorderRadius? borderRadius,
+  }) {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, child) {
+        final val = _shimmerAnimation.value;
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: borderRadius ?? BorderRadius.circular(5.0),
+            gradient: LinearGradient(
+              begin: Alignment(val - 1.0, 0),
+              end: Alignment(val + 1.0, 0),
+              colors: const [
+                Color(0xFFE2E8F0),
+                Color(0xFFF8FAFC),
+                Color(0xFFE2E8F0),
+              ],
+              stops: const [0.1, 0.5, 0.9],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSkeletonSliverList() {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Leading Icon box (5px radius)
+                  _buildShimmerBox(
+                    width: 48,
+                    height: 48,
+                    borderRadius: BorderRadius.circular(5.0),
+                  ),
+                  const SizedBox(width: 12),
+                  // Notification details skeleton
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title & timestamp
+                        Row(
+                          children: [
+                            _buildShimmerBox(
+                              width: 140,
+                              height: 14,
+                              borderRadius: BorderRadius.circular(5.0),
+                            ),
+                            const Spacer(),
+                            _buildShimmerBox(
+                              width: 45,
+                              height: 10,
+                              borderRadius: BorderRadius.circular(5.0),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Message row 1
+                        _buildShimmerBox(
+                          width: double.infinity,
+                          height: 11,
+                          borderRadius: BorderRadius.circular(5.0),
+                        ),
+                        const SizedBox(height: 5),
+                        // Message row 2
+                        _buildShimmerBox(
+                          width: 190,
+                          height: 11,
+                          borderRadius: BorderRadius.circular(5.0),
+                        ),
+                        const SizedBox(height: 10),
+                        // Category & tag pills
+                        Row(
+                          children: [
+                            _buildShimmerBox(
+                              width: 72,
+                              height: 18,
+                              borderRadius: BorderRadius.circular(5.0),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildShimmerBox(
+                              width: 56,
+                              height: 18,
+                              borderRadius: BorderRadius.circular(5.0),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(
+              color: Color(0xFFF1F5F9),
+              height: 1,
+              thickness: 1,
+              indent: 76,
+            ),
+          ],
+        );
+      }, childCount: 6),
     );
   }
 }

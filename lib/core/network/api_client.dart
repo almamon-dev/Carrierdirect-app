@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import '../../app/config/api_config.dart';
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
@@ -15,9 +16,9 @@ class ApiClient {
     String? baseUrl,
     HttpClient? httpClient,
     ISecureStorage? secureStorage,
-  })  : baseUrl = baseUrl ?? ApiConfig.baseUrl,
-        _httpClient = httpClient ?? HttpClient(),
-        _secureStorage = secureStorage ?? SecureStorage() {
+  }) : baseUrl = baseUrl ?? ApiConfig.baseUrl,
+       _httpClient = httpClient ?? HttpClient(),
+       _secureStorage = secureStorage ?? SecureStorage() {
     _httpClient.connectionTimeout = ApiConfig.connectTimeout;
   }
 
@@ -25,8 +26,10 @@ class ApiClient {
     final headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     };
-    final effectiveToken = token ?? await _secureStorage.read(AppConstants.keyAuthToken);
+    final effectiveToken =
+        token ?? await _secureStorage.read(AppConstants.keyAuthToken);
     if (effectiveToken != null && effectiveToken.isNotEmpty) {
       headers['Authorization'] = 'Bearer $effectiveToken';
     }
@@ -40,9 +43,10 @@ class ApiClient {
     T Function(dynamic data)? fromJson,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl$endpoint').replace(queryParameters: queryParams);
+      final uri = Uri.parse('$baseUrl$endpoint')
+          .replace(queryParameters: queryParams);
       final request = await _httpClient.getUrl(uri);
-      
+
       final headers = await _headers(token);
       headers.forEach((key, value) {
         request.headers.set(key, value);
@@ -67,7 +71,7 @@ class ApiClient {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
       final request = await _httpClient.postUrl(uri);
-      
+
       final headers = await _headers(token);
       headers.forEach((key, value) {
         request.headers.set(key, value);
@@ -96,7 +100,7 @@ class ApiClient {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
       final request = await _httpClient.putUrl(uri);
-      
+
       final headers = await _headers(token);
       headers.forEach((key, value) {
         request.headers.set(key, value);
@@ -124,7 +128,7 @@ class ApiClient {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
       final request = await _httpClient.deleteUrl(uri);
-      
+
       final headers = await _headers(token);
       headers.forEach((key, value) {
         request.headers.set(key, value);
@@ -147,7 +151,9 @@ class ApiClient {
   ) {
     if (statusCode >= 200 && statusCode < 300) {
       final dynamic body = bodyStr.isNotEmpty ? jsonDecode(bodyStr) : null;
-      final parsedData = fromJson != null && body != null ? fromJson(body) : body as T?;
+      final parsedData = fromJson != null && body != null
+          ? fromJson(body)
+          : body as T?;
       return ApiResponse.success(parsedData as T, statusCode: statusCode);
     } else {
       String errorMsg = 'Unknown error';

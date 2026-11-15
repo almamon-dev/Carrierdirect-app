@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../core/routes/app_routes.dart';
 import '../../services/notification_service.dart';
 
@@ -76,8 +78,9 @@ class _NotificationPermissionScreenState
     final screenHeight = mediaQuery.size.height;
     // Responsive Hero banner taking ~38% of screen height
     final heroHeight = (screenHeight * 0.38).clamp(220.0, 340.0);
-    final bottomInset =
-        mediaQuery.padding.bottom > 0 ? mediaQuery.padding.bottom : 8.0;
+    final bottomInset = mediaQuery.padding.bottom > 0
+        ? mediaQuery.padding.bottom
+        : 8.0;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -173,21 +176,13 @@ class _NotificationPermissionScreenState
                 alignment: Alignment.topCenter,
                 children: [
                   // Overlapping Bell Badge with White Ring & Soundwaves
-                  Positioned(
-                    top: -38,
-                    child: _buildOverlappingBellBadge(),
-                  ),
+                  Positioned(top: -38, child: _buildOverlappingBellBadge()),
 
                   // Sheet Body Content with Natural, Proportional Spacing
                   SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        18,
-                        46,
-                        18,
-                        bottomInset + 5,
-                      ),
+                      padding: EdgeInsets.fromLTRB(18, 46, 18, bottomInset + 5),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -205,9 +200,7 @@ class _NotificationPermissionScreenState
                                 TextSpan(text: 'Stay '),
                                 TextSpan(
                                   text: 'Updated',
-                                  style: TextStyle(
-                                    color: Color(0xFFFF4500),
-                                  ),
+                                  style: TextStyle(color: Color(0xFFFF4500)),
                                 ),
                               ],
                             ),
@@ -251,8 +244,7 @@ class _NotificationPermissionScreenState
                           _buildFeatureCard(
                             iconWidget: const _ChatBubbleWithDots(),
                             title: 'Messages from dispatch',
-                            subtitle:
-                                'Receive important messages instantly.',
+                            subtitle: 'Receive important messages instantly.',
                           ),
 
                           // 4. Delivery confirmations (Orange Circle Badge with White Checkmark)
@@ -377,10 +369,7 @@ class _NotificationPermissionScreenState
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFFF5E2B),
-                    Color(0xFFFF3D00),
-                  ],
+                  colors: [Color(0xFFFF5E2B), Color(0xFFFF3D00)],
                 ),
               ),
               child: const Icon(
@@ -406,7 +395,7 @@ class _NotificationPermissionScreenState
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9.5),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(5.0),
+        borderRadius: BorderRadius.circular(4.0),
         border: Border.all(color: const Color(0xFFF1F5F9), width: 1.1),
         boxShadow: [
           BoxShadow(
@@ -482,10 +471,7 @@ class _NotificationPermissionScreenState
         gradient: const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            Color(0xFFFF5722),
-            Color(0xFFFF3D00),
-          ],
+          colors: [Color(0xFFFF5722), Color(0xFFFF3D00)],
         ),
         boxShadow: [
           BoxShadow(
@@ -611,9 +597,7 @@ class _IsometricBoxIcon extends StatelessWidget {
     return SizedBox(
       width: 21,
       height: 21,
-      child: CustomPaint(
-        painter: const _IsometricBoxPainter(),
-      ),
+      child: CustomPaint(painter: const _IsometricBoxPainter()),
     );
   }
 }
@@ -633,10 +617,7 @@ class _IsometricBoxPainter extends CustomPainter {
       ..lineTo(w * 0.5, h * 0.52)
       ..lineTo(w * 0.08, h * 0.30)
       ..close();
-    canvas.drawPath(
-      topFace,
-      Paint()..color = const Color(0xFFFF8A65),
-    );
+    canvas.drawPath(topFace, Paint()..color = const Color(0xFFFF8A65));
 
     // Left face
     final leftFace = Path()
@@ -645,10 +626,7 @@ class _IsometricBoxPainter extends CustomPainter {
       ..lineTo(w * 0.5, h * 0.92)
       ..lineTo(w * 0.08, h * 0.70)
       ..close();
-    canvas.drawPath(
-      leftFace,
-      Paint()..color = const Color(0xFFFF7043),
-    );
+    canvas.drawPath(leftFace, Paint()..color = const Color(0xFFFF7043));
 
     // Right face
     final rightFace = Path()
@@ -657,10 +635,7 @@ class _IsometricBoxPainter extends CustomPainter {
       ..lineTo(w * 0.92, h * 0.70)
       ..lineTo(w * 0.5, h * 0.92)
       ..close();
-    canvas.drawPath(
-      rightFace,
-      Paint()..color = const Color(0xFFE64A19),
-    );
+    canvas.drawPath(rightFace, Paint()..color = const Color(0xFFE64A19));
 
     // Sealing tape strip across top face
     final tape = Path()
@@ -699,9 +674,7 @@ class _ChatBubbleWithDots extends StatelessWidget {
     return SizedBox(
       width: 20,
       height: 18,
-      child: CustomPaint(
-        painter: const _ChatBubblePainter(),
-      ),
+      child: CustomPaint(painter: const _ChatBubblePainter()),
     );
   }
 }

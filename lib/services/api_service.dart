@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import '../core/constants/api_constants.dart';
 import '../core/storage/local_storage.dart';
 
@@ -15,6 +17,7 @@ class ApiService {
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
@@ -25,7 +28,10 @@ class ApiService {
     return await http.get(url, headers: headers);
   }
 
-  Future<http.Response> post(String endpoint, {Map<String, dynamic>? data}) async {
+  Future<http.Response> post(
+    String endpoint, {
+    Map<String, dynamic>? data,
+  }) async {
     final url = Uri.parse('${ApiConstants.baseUrl}$endpoint');
     final headers = await _headers();
     return await http.post(
@@ -35,7 +41,10 @@ class ApiService {
     );
   }
 
-  Future<http.Response> put(String endpoint, {Map<String, dynamic>? data}) async {
+  Future<http.Response> put(
+    String endpoint, {
+    Map<String, dynamic>? data,
+  }) async {
     final url = Uri.parse('${ApiConstants.baseUrl}$endpoint');
     final headers = await _headers();
     return await http.put(

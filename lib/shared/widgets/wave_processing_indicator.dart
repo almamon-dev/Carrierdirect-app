@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class WaveProcessingIndicator extends StatefulWidget {
@@ -20,7 +21,8 @@ class WaveProcessingIndicator extends StatefulWidget {
   });
 
   @override
-  State<WaveProcessingIndicator> createState() => _WaveProcessingIndicatorState();
+  State<WaveProcessingIndicator> createState() =>
+      _WaveProcessingIndicatorState();
 }
 
 class _WaveProcessingIndicatorState extends State<WaveProcessingIndicator>
@@ -56,7 +58,8 @@ class _WaveProcessingIndicatorState extends State<WaveProcessingIndicator>
             final offset = (index * 0.7);
             final progress = (_controller.value * 2 * math.pi) - offset;
             final normalized = (math.sin(progress) + 1.0) / 2.0; // 0.0 to 1.0
-            final barHeight = widget.minHeight +
+            final barHeight =
+                widget.minHeight +
                 (widget.maxHeight - widget.minHeight) * normalized;
 
             return Container(
