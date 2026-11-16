@@ -115,6 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.of(context).pushReplacementNamed(AppRoutes.adminApproval);
       }
     } else if (isNotificationGranted) {
+      NotificationService().syncTokenWithBackend();
       Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
     } else {
       Navigator.of(context)

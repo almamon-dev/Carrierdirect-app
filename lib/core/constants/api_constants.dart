@@ -1,10 +1,13 @@
+import '../../services/app_config_service.dart';
+
 class ApiConstants {
   ApiConstants._();
 
-  static const String baseUrl =
-      'https://shaw-charge-usc-listprice.trycloudflare.com/api/v1';
-  static const String googleMapsApiKey =
-      'AIzaSyCpMW2SPdb1R3vzV3FsxqM2VEBM4iWhDZk';
+  static String get baseUrl => AppConfigService().apiBaseUrl;
+  static String get googleMapsApiKey => AppConfigService().googleMapsApiKey;
+
+  // App bootstrap configuration
+  static const String appConfig = '/app-config';
 
   // Auth endpoints
   static const String login = '/auth/login';
@@ -22,6 +25,7 @@ class ApiConstants {
   static const String verificationStatus = '/driver/verification-status';
   static const String updateLocation = '/driver/location';
   static const String toggleOnlineStatus = '/driver/status';
+  static const String deviceToken = '/driver/device-token';
   static const String notificationSettings = '/driver/notification-settings';
   static const String changePassword = '/driver/change-password';
   static const String setup2fa = '/driver/2fa/setup';

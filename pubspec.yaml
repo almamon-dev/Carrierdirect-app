@@ -48,6 +48,9 @@ dependencies:
   flutter_tts: ^4.2.5
   google_maps_flutter_android: ^2.19.12
   google_maps_flutter_platform_interface: ^2.16.0
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
+  flutter_local_notifications: ^23.0.2
 
 dependency_overrides:
   permission_handler_android: 13.0.1
@@ -78,10 +81,6 @@ flutter:
   assets:
     - assets/images/
     - assets/images/splash_bg.png
-    - assets/images/onboarding_loads.png
-    - assets/images/onboarding_connected.png
-    - assets/images/location_access.png
-    - assets/images/location_enabled.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -1,5 +1,7 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../services/app_config_service.dart';
+import '../../../../services/notification_service.dart';
 import '../models/user_model.dart';
 
 abstract class IAuthRemoteDataSource {
@@ -24,9 +26,20 @@ class AuthRemoteDataSource implements IAuthRemoteDataSource {
     required String email,
     required String password,
   }) async {
+    final config = AppConfigService();
+    final deviceToken = await NotificationService().getDeviceToken();
+    final body = <String, dynamic>{
+      'email': email,
+      'password': password,
+      'device_type': config.clientPlatform,
+      'app_version': config.appVersion,
+      if (deviceToken != null && deviceToken.isNotEmpty)
+        'device_token': deviceToken,
+    };
+
     final response = await _apiClient.post(
       endpoint: ApiConstants.login,
-      body: {'email': email, 'password': password, 'device_type': 'android'},
+      body: body,
       fromJson: (data) {
         if (data is Map<String, dynamic>) {
           final innerData = data['data'] is Map<String, dynamic>
@@ -59,9 +72,20 @@ class AuthRemoteDataSource implements IAuthRemoteDataSource {
     required String email,
     required String code,
   }) async {
+    final config = AppConfigService();
+    final deviceToken = await NotificationService().getDeviceToken();
+    final body = <String, dynamic>{
+      'email': email,
+      'code': code,
+      'device_type': config.clientPlatform,
+      'app_version': config.appVersion,
+      if (deviceToken != null && deviceToken.isNotEmpty)
+        'device_token': deviceToken,
+    };
+
     final response = await _apiClient.post(
       endpoint: ApiConstants.verify2faLogin,
-      body: {'email': email, 'code': code, 'device_type': 'android'},
+      body: body,
       fromJson: (data) {
         if (data is Map<String, dynamic>) {
           final innerData = data['data'] is Map<String, dynamic>
@@ -101,6 +125,14 @@ class AuthRemoteDataSource implements IAuthRemoteDataSource {
 
   @override
   Future<void> logout() async {
-    await _apiClient.post(endpoint: ApiConstants.logout);
+    final deviceToken = NotificationService().cachedToken ??
+        await NotificationService().getDeviceToken();
+    await _apiClient.post(
+      endpoint: ApiConstants.logout,
+      body: {
+        if (deviceToken != null && deviceToken.isNotEmpty)
+          'device_token': deviceToken,
+      },
+    );
   }
 }

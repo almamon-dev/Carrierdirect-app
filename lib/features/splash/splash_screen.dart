@@ -11,6 +11,7 @@ import '../../core/routes/app_routes.dart';
 import '../../core/storage/local_storage.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/app_config_service.dart';
 import '../../services/location_service.dart';
 import '../../services/notification_service.dart';
 import '../auth/data/repositories/auth_repository.dart';
@@ -111,6 +112,22 @@ class _SplashScreenState extends State<SplashScreen>
     _animDelayTimer?.cancel();
 
     try {
+      // Hydrate runtime config (Google Maps key, GPS interval, FCM & maintenance status)
+      await AppConfigService().loadRemoteConfig();
+      if (!mounted) return;
+
+      if (AppConfigService().maintenanceMode) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Scheduled Maintenance'),
+            content: Text(AppConfigService().maintenanceMessage),
+          ),
+        );
+        return;
+      }
+
       final isLocationGranted = await LocationService().checkPermission();
       final isOnboardingDone =
           await LocalStorage().getBool(AppConstants.keyOnboardingCompleted) ??
@@ -172,12 +189,13 @@ class _SplashScreenState extends State<SplashScreen>
               return;
             }
 
-            // Valid, verified returning driver -> Notification Permission Check -> Driver Dashboard
+            // Valid, verified returning driver -> Sync Push Token & Notification Check -> Driver Dashboard
             final isNotifGranted =
                 await NotificationService().checkPermission();
             if (!mounted) return;
 
             if (isNotifGranted) {
+              unawaited(NotificationService().syncTokenWithBackend());
               Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
             } else {
               Navigator.of(context).pushReplacementNamed(

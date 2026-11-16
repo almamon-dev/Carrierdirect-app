@@ -1631,21 +1631,40 @@ class ShipmentOverviewTab extends StatelessWidget {
 
     if (state == 'done') {
       if (formattedDate != null && formattedDate.isNotEmpty) {
+        final parts = formattedDate.split(',');
+        final datePart = parts.first.trim();
+        final timePart =
+            parts.length > 1 ? parts.sublist(1).join(',').trim() : '';
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
               Icons.calendar_today_outlined,
               size: 11,
-              color: Color(0xFF94A3B8),
+              color: darkSlate,
             ),
             const SizedBox(width: 4),
-            Text(
-              formattedDate,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                children: [
+                  TextSpan(
+                    text: timePart.isNotEmpty ? '$datePart, ' : datePart,
+                    style: const TextStyle(color: darkSlate),
+                  ),
+                  if (timePart.isNotEmpty)
+                    TextSpan(
+                      text: timePart,
+                      style: const TextStyle(
+                        color: primaryOrange,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

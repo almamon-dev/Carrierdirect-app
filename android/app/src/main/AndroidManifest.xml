@@ -17,6 +17,10 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCpMW2SPdb1R3vzV3FsxqM2VEBM4iWhDZk" />
+        <!-- Default FCM Notification Channel -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="carrierdirect_driver_channel" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -64,7 +64,10 @@ class _NotificationPermissionScreenState
   void _handleEnableNotifications() async {
     setState(() => _isLoading = true);
     try {
-      await _notificationService.requestPermissions();
+      final granted = await _notificationService.requestPermissions();
+      if (granted) {
+        await _notificationService.syncTokenWithBackend();
+      }
     } catch (_) {}
     if (mounted) {
       setState(() => _isLoading = false);

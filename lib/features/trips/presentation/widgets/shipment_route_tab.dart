@@ -965,8 +965,12 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
     required String totalDist,
     required String totalDur,
   }) {
+    final compactLeg1Dur = Formatters.formatCompactDuration(leg1Dur);
+    final compactLeg2Dur = Formatters.formatCompactDuration(leg2Dur);
+    final compactTotalDur = Formatters.formatCompactDuration(totalDur);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(5.0),
@@ -980,14 +984,15 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Segment 1: Driver -> Pickup
           Expanded(
             child: Row(
               children: [
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   decoration: const BoxDecoration(
                     color: Color(0xFFEFF6FF),
                     shape: BoxShape.circle,
@@ -996,30 +1001,39 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
                     child: Icon(
                       Icons.local_shipping_rounded,
                       color: Color(0xFF2563EB),
-                      size: 12,
+                      size: 10.5,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Driver → Pickup',
-                        style: GoogleFonts.inter(
-                          fontSize: 9.0,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF2563EB),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Driver → Pickup',
+                          style: GoogleFonts.inter(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF2563EB),
+                          ),
                         ),
                       ),
-                      Text(
-                        '$leg1Dist • $leg1Dur',
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: slateDark,
+                      const SizedBox(height: 1),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '$leg1Dist • $compactLeg1Dur',
+                          style: GoogleFonts.inter(
+                            fontSize: 9.0,
+                            fontWeight: FontWeight.w600,
+                            color: slateDark,
+                          ),
                         ),
                       ),
                     ],
@@ -1042,8 +1056,8 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
             child: Row(
               children: [
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   decoration: const BoxDecoration(
                     color: Color(0xFFDCFCE7),
                     shape: BoxShape.circle,
@@ -1052,30 +1066,39 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
                     child: Icon(
                       Icons.inventory_2_rounded,
                       color: greenPickup,
-                      size: 11,
+                      size: 10,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Pickup → Delivery',
-                        style: GoogleFonts.inter(
-                          fontSize: 9.0,
-                          fontWeight: FontWeight.w600,
-                          color: greenPickup,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Pickup → Delivery',
+                          style: GoogleFonts.inter(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w500,
+                            color: greenPickup,
+                          ),
                         ),
                       ),
-                      Text(
-                        '$leg2Dist • $leg2Dur',
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: slateDark,
+                      const SizedBox(height: 1),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '$leg2Dist • $compactLeg2Dur',
+                          style: GoogleFonts.inter(
+                            fontSize: 9.0,
+                            fontWeight: FontWeight.w600,
+                            color: slateDark,
+                          ),
                         ),
                       ),
                     ],
@@ -1098,8 +1121,8 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
             child: Row(
               children: [
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   decoration: const BoxDecoration(
                     color: Color(0xFFF1F5F9),
                     shape: BoxShape.circle,
@@ -1108,30 +1131,39 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
                     child: Icon(
                       Icons.link_rounded,
                       color: slateDark,
-                      size: 13,
+                      size: 11,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Total Journey',
-                        style: GoogleFonts.inter(
-                          fontSize: 9.0,
-                          fontWeight: FontWeight.w600,
-                          color: slateMuted,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Total Journey',
+                          style: GoogleFonts.inter(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w500,
+                            color: slateMuted,
+                          ),
                         ),
                       ),
-                      Text(
-                        '$totalDist • $totalDur',
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: slateDark,
+                      const SizedBox(height: 1),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '$totalDist • $compactTotalDur',
+                          style: GoogleFonts.inter(
+                            fontSize: 9.0,
+                            fontWeight: FontWeight.w600,
+                            color: slateDark,
+                          ),
                         ),
                       ),
                     ],
@@ -1168,14 +1200,14 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
                 const Icon(
                   Icons.alt_route_rounded,
                   color: orangePrimary,
-                  size: 15,
+                  size: 14,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   'Route Options',
                   style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
                     color: slateDark,
                   ),
                 ),
@@ -1187,8 +1219,8 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
                 Text(
                   'Traffic',
                   style: GoogleFonts.inter(
-                    fontSize: 11.0,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
                     color: slateMuted,
                   ),
                 ),
@@ -1266,18 +1298,18 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFFFFF7ED) : Colors.white,
             borderRadius: BorderRadius.circular(5.0),
             border: Border.all(
               color: isSelected ? orangePrimary : borderColor,
-              width: isSelected ? 1.5 : 1.0,
+              width: isSelected ? 1.3 : 1.0,
             ),
             boxShadow: [
               BoxShadow(
                 color: isSelected
-                    ? orangePrimary.withValues(alpha: 0.1)
+                    ? orangePrimary.withValues(alpha: 0.08)
                     : Colors.black.withValues(alpha: 0.02),
                 blurRadius: 3,
                 offset: const Offset(0, 1),
@@ -1293,58 +1325,69 @@ class _ShipmentRouteTabState extends State<ShipmentRouteTab>
                 children: [
                   Icon(
                     icon,
-                    size: 11,
+                    size: 10.5,
                     color: isSelected ? orangePrimary : slateMuted,
                   ),
                   const SizedBox(width: 2.5),
                   Expanded(
-                    child: Text(
-                      title,
-                      style: GoogleFonts.inter(
-                        fontSize: 9.5,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w600,
-                        color: isSelected ? orangePrimary : slateDark,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        style: GoogleFonts.inter(
+                          fontSize: 9.0,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? orangePrimary : slateDark,
+                        ),
                       ),
                     ),
                   ),
                   if (isSelected)
                     const Icon(
                       Icons.check_circle_rounded,
-                      size: 13,
+                      size: 12,
                       color: orangePrimary,
                     )
                   else
                     const Icon(
                       Icons.radio_button_unchecked,
-                      size: 11,
+                      size: 10.5,
                       color: Color(0xFFCBD5E1),
                     ),
                 ],
               ),
 
-              const SizedBox(height: 3),
+              const SizedBox(height: 2.5),
 
-              // Large Duration
-              Text(
-                duration,
-                style: GoogleFonts.inter(
-                  fontSize: 13.0,
-                  fontWeight: FontWeight.w900,
-                  color: slateDark,
-                  letterSpacing: -0.2,
+              // Duration
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  duration,
+                  style: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: slateDark,
+                  ),
                 ),
               ),
 
               const SizedBox(height: 1),
 
               // Distance
-              Text(
-                distance,
-                style: GoogleFonts.inter(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w500,
-                  color: slateMuted,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  distance,
+                  style: GoogleFonts.inter(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w400,
+                    color: slateMuted,
+                  ),
                 ),
               ),
             ],

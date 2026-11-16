@@ -44,58 +44,6 @@ class ShipmentTopAppBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
-          _buildStatusBadge(shipment),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(ShipmentItem s) {
-    final raw = s.rawStatus.toLowerCase();
-    Color bg = const Color(0xFFEFF6FF);
-    Color border = const Color(0xFFDBEAFE);
-    Color textColor = const Color(0xFF2563EB);
-    IconData icon = Icons.assignment_ind_outlined;
-
-    if (raw.contains('deliver') || raw.contains('complete')) {
-      bg = const Color(0xFFECFDF5);
-      border = const Color(0xFFA7F3D0);
-      textColor = const Color(0xFF059669);
-      icon = Icons.check_circle_outline_rounded;
-    } else if (raw.contains('transit') || raw.contains('progress') || raw.contains('picked') || raw.contains('arrived')) {
-      bg = const Color(0xFFFFF7ED);
-      border = const Color(0xFFFFEDD5);
-      textColor = const Color(0xFFFF5722);
-      icon = Icons.local_shipping_outlined;
-    }
-
-    final String displayStatus = (s.isRelay &&
-            s.isLeg1 &&
-            s.isLeg1HandoverCompleted)
-        ? 'Leg 1 Completed'
-        : s.statusLabel;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: textColor),
-          const SizedBox(width: 4),
-          Text(
-            displayStatus,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
         ],
       ),
     );
