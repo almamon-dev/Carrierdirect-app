@@ -100,31 +100,46 @@ class ShipmentOrderHeaderCard extends StatelessWidget {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.successLight,
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: const Color(0xFFA7F3D0)),
+              color: shipment.isEmergency ? const Color(0xFFFEF2F2) : AppColors.successLight,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: shipment.isEmergency ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.local_shipping_rounded,
-                  size: 14,
-                  color: AppColors.success,
-                ),
-                const SizedBox(width: 4),
+                if (shipment.isEmergency)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 5),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFCF222E),
+                      shape: BoxShape.circle,
+                    ),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.local_shipping_rounded,
+                      size: 13,
+                      color: AppColors.success,
+                    ),
+                  ),
                 Text(
-                  (shipment.isRelay &&
-                          shipment.isLeg1 &&
-                          shipment.isLeg1HandoverCompleted)
-                      ? 'Leg 1 Completed'
-                      : shipment.statusLabel,
+                  shipment.isEmergency
+                      ? 'Emergency Hold'
+                      : (shipment.isRelay &&
+                              shipment.isLeg1 &&
+                              shipment.isLeg1HandoverCompleted)
+                          ? 'Leg 1 Completed'
+                          : shipment.statusLabel,
                   style: GoogleFonts.inter(
-                    color: AppColors.success,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.bold,
+                    color: shipment.isEmergency ? const Color(0xFFCF222E) : AppColors.success,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],

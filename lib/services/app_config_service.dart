@@ -20,7 +20,7 @@ class AppConfigService {
   static const String _defaultBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue:
-    'https://admin.carrierdirect.io/api/v1',
+    'https://roster-iso-temporal-contacted.trycloudflare.com/api/v1',
   );
   static const String _defaultMapsApiKey = String.fromEnvironment(
     'GOOGLE_MAPS_API_KEY',

@@ -178,7 +178,7 @@ class _HandoverModalState extends State<HandoverModal> {
         ? widget.shipment.hubLocation
         : (handover?['hub_location']?.toString() ?? 'Intermediate Hub');
     final partner = widget.shipment.partnerDriver;
-    final partnerName = partner?['driver_name']?.toString() ?? 'Driver 2';
+    final partnerName = partner?['driver_name']?.toString() ?? 'Sean Murphy (Relay Driver)';
     final partnerPhone = partner?['driver_phone']?.toString() ?? '—';
 
     return Padding(

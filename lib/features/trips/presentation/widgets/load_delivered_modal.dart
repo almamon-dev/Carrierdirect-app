@@ -292,7 +292,7 @@ class _LoadDeliveredModalState extends State<LoadDeliveredModal> {
                   controller: _nameController,
                   style: GoogleFonts.inter(fontSize: 13, color: darkSlate),
                   decoration: InputDecoration(
-                    hintText: 'e.g. John Doe (Supervisor)',
+                    hintText: 'e.g. Mahbubur Rahman (Consignee Supervisor)',
                     hintStyle: GoogleFonts.inter(
                       fontSize: 12.5,
                       color: const Color(0xFF94A3B8),

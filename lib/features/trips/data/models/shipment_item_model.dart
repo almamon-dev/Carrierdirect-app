@@ -69,6 +69,13 @@ class ShipmentItem {
   final String rawMilestoneStatus;
   final String orderStatus;
 
+  // Emergency Fields
+  final bool isEmergency;
+  final String emergencyStatus;
+  final String emergencyReason;
+  final String emergencyNotes;
+  final String emergencyReportedAt;
+
   const ShipmentItem({
     required this.id,
     this.dbId = '',
@@ -133,6 +140,11 @@ class ShipmentItem {
     this.relayLegs = const [],
     this.rawMilestoneStatus = '',
     this.orderStatus = '',
+    this.isEmergency = false,
+    this.emergencyStatus = '',
+    this.emergencyReason = '',
+    this.emergencyNotes = '',
+    this.emergencyReportedAt = '',
   });
 
   bool get isSubcontractor => driverType == 'subcontractor' || subcontractorCompany.isNotEmpty;
@@ -158,7 +170,7 @@ class ShipmentItem {
   }
 
   bool get isLeg1HandoverCompleted {
-    if (!isRelay || isDeliveryOnly) return false;
+    if (!isRelay || isDeliveryOnly || isEmergency) return false;
     return isHandoverAccepted ||
         rawStatus.toLowerCase() == 'completed' ||
         rawStatus.toLowerCase() == 'delivered';
@@ -397,6 +409,19 @@ class ShipmentItem {
       }
     }
 
+    final emergencyObj = safeMap(json['emergency']);
+    final bool hasEmergency = (emergencyObj['is_emergency'] == true) ||
+        (json['emergency_status'] == 'reported') ||
+        (statusStr == 'emergency_hold') ||
+        (statusStr == 'reassignment_required') ||
+        relayLegs.any((l) =>
+            (l['emergency_status'] == 'reported' || l['status'] == 'reassignment_required') &&
+            (l['leg_number'] == (isDeliveryOnly ? 2 : driverLegNumber)));
+    final String emStatus = (emergencyObj['emergency_status'] ?? json['emergency_status'] ?? '').toString();
+    final String emReason = (emergencyObj['emergency_reason'] ?? json['emergency_reason'] ?? '').toString();
+    final String emNotes = (emergencyObj['emergency_notes'] ?? json['emergency_notes'] ?? '').toString();
+    final String emReportedAt = (emergencyObj['emergency_reported_at'] ?? json['emergency_reported_at'] ?? '').toString();
+
     return ShipmentItem(
       id: displayId,
       dbId: actualDbId,
@@ -458,6 +483,11 @@ class ShipmentItem {
       relayLegs: relayLegs,
       rawMilestoneStatus: (json['raw_milestone_status'] ?? '').toString(),
       orderStatus: (json['order_status'] ?? '').toString(),
+      isEmergency: hasEmergency,
+      emergencyStatus: emStatus,
+      emergencyReason: emReason,
+      emergencyNotes: emNotes,
+      emergencyReportedAt: emReportedAt,
     );
   }
 
@@ -525,6 +555,11 @@ class ShipmentItem {
     List<Map<String, dynamic>>? relayLegs,
     String? rawMilestoneStatus,
     String? orderStatus,
+    bool? isEmergency,
+    String? emergencyStatus,
+    String? emergencyReason,
+    String? emergencyNotes,
+    String? emergencyReportedAt,
   }) {
     return ShipmentItem(
       id: id ?? this.id,
@@ -591,6 +626,11 @@ class ShipmentItem {
       relayLegs: relayLegs ?? this.relayLegs,
       rawMilestoneStatus: rawMilestoneStatus ?? this.rawMilestoneStatus,
       orderStatus: orderStatus ?? this.orderStatus,
+      isEmergency: isEmergency ?? this.isEmergency,
+      emergencyStatus: emergencyStatus ?? this.emergencyStatus,
+      emergencyReason: emergencyReason ?? this.emergencyReason,
+      emergencyNotes: emergencyNotes ?? this.emergencyNotes,
+      emergencyReportedAt: emergencyReportedAt ?? this.emergencyReportedAt,
     );
   }
 }

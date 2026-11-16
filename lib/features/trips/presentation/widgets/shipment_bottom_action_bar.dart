@@ -86,6 +86,38 @@ class ShipmentBottomActionBar extends StatelessWidget {
         rawStatus == 'at_delivery' ||
         rawStatus == 'at_hub';
 
+    if (shipment.isEmergency) {
+      return _buildContainerWrapper(
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.pause_circle_outline_rounded,
+                color: Color(0xFF64748B),
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Shift on Hold • Reassignment Active',
+                style: TextStyle(
+                  color: Color(0xFF475569),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     // 1. RELAY WORKFLOW – DRIVER 1 (Leg 1: Pickup to Hub)
     if (shipment.isLeg1) {
       if (shipment.isLeg1HandoverCompleted) {

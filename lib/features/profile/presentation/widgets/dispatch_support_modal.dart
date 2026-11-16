@@ -99,16 +99,16 @@ class DispatchSupportModal extends StatelessWidget {
                   ChatScreen.openForShipment(
                     context,
                     shipment: const ShipmentItem(
-                      id: 'SHP-987654',
+                      id: 'ORD-2026-10001',
                       status: ShipmentFilter.inProgress,
-                      originTitle: 'ABC Warehouse Logistics',
-                      originAddress: 'Bay 4, Port Logistics Park',
-                      destTitle: 'Starlight Supermarket Central',
-                      destAddress: 'Dock 12, 742 Evergreen Terrace',
+                      originTitle: 'Dhaka Central Freight Hub',
+                      originAddress: 'Tejgaon Industrial Area, Bay 4, Dhaka',
+                      destTitle: 'Chittagong Port Terminal',
+                      destAddress: 'Dock 12, Agrabad Port Area, Chittagong',
                       date: 'Today',
                       time: '04:30 PM',
-                      cargoType: 'Refrigerated Dairy & Goods',
-                      distanceKm: 42.8,
+                      cargoType: 'Euro Pallets (EPAL-1)',
+                      distanceKm: 250.0,
                       statusLabel: 'In Transit',
                     ),
                   );

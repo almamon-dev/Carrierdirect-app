@@ -1206,6 +1206,85 @@ class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen>
               },
             ),
             ShipmentOrderHeaderCard(shipment: _shipment, onCopyId: _copyLoadId),
+            if (_shipment.isEmergency)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: const Border(
+                    left: BorderSide(color: Color(0xFFCF222E), width: 3.5),
+                    top: BorderSide(color: Color(0xFFE2E8F0), width: 1.0),
+                    right: BorderSide(color: Color(0xFFE2E8F0), width: 1.0),
+                    bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.0),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          size: 15,
+                          color: Color(0xFFCF222E),
+                        ),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'Shift on Sick Leave / Emergency Hold',
+                            style: TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Text(
+                            _shipment.emergencyReason.isNotEmpty
+                                ? _shipment.emergencyReason.replaceAll('_', ' ').toUpperCase()
+                                : 'SICK LEAVE',
+                            style: const TextStyle(
+                              color: Color(0xFFCF222E),
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _shipment.emergencyNotes.isNotEmpty
+                          ? 'Notes: "${_shipment.emergencyNotes}"'
+                          : 'Corridor reassignment is in progress by operations dispatch.',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ShipmentTabBar(
               selectedIndex: _selectedTabIndex,
               onTabSelected: (index) {

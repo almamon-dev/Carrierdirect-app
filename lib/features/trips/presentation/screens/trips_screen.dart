@@ -889,8 +889,8 @@ class _TripsScreenState extends State<TripsScreen> {
   }
 
   Widget _buildShipmentListItem(ShipmentItem item) {
-    final statusColor = _getStatusColor(item.status);
-    final statusBg = _getStatusBg(item.status);
+    final statusColor = item.isEmergency ? const Color(0xFFCF222E) : _getStatusColor(item.status);
+    final statusBg = item.isEmergency ? const Color(0xFFFEF2F2) : _getStatusBg(item.status);
 
     return GestureDetector(
       onTap: () async {
@@ -969,11 +969,11 @@ class _TripsScreenState extends State<TripsScreen> {
                         ),
                       ),
                       child: Text(
-                        item.statusLabel,
+                        item.isEmergency ? 'Emergency Hold' : item.statusLabel,
                         style: TextStyle(
                           color: statusColor,
                           fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),

@@ -118,7 +118,7 @@ class _AcceptHandoverModalState extends State<AcceptHandoverModal> {
     final handover = widget.shipment.handover;
     final partner = widget.shipment.partnerDriver;
     final partnerName = partner?['driver_name']?.toString() ??
-        (handover?['driver_from_name']?.toString() ?? 'Driver 1');
+        (handover?['driver_from_name']?.toString() ?? 'Aidan Moroney (Collection Driver)');
     final partnerPhone = partner?['driver_phone']?.toString() ??
         (handover?['driver_from_phone']?.toString() ?? '—');
     final hubLocation = widget.shipment.hubLocation.isNotEmpty
@@ -181,7 +181,7 @@ class _AcceptHandoverModalState extends State<AcceptHandoverModal> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Accept Cargo from Driver 1',
+                            'Accept Cargo from Collection Driver',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -230,7 +230,7 @@ class _AcceptHandoverModalState extends State<AcceptHandoverModal> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'ORIGIN PICKUP DRIVER (LEG 1)',
+                              'COLLECTION DRIVER (LEG 1)',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
